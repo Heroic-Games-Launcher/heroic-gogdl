@@ -48,4 +48,5 @@ class DepotV1():
 class DependencyV1():
     def __init__(self, data):
         self.id = data['redist']
+        self.size = int(data['size'])
         self.target_dir = data['targetDir']

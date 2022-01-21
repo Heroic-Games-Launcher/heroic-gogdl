@@ -44,22 +44,26 @@ class DownloadManager():
             disk_size = size_data[1]
 
             dlcs = []
-            for product in self.meta['products']:
-                if product["productId"] != self.meta["baseProductId"]:
-                    if self.api_handler.does_user_own("productId"):
-                        dlcs.append({
-                            "title": product['name'],
-                            "app_name": product['productId']
-                        })
+            if self.depot_version == 2:
+                for product in self.meta['products']:
+                    if product["productId"] != self.meta["baseProductId"]:
+                        if self.api_handler.does_user_own("productId"):
+                            dlcs.append({
+                                "title": product['name'],
+                                "app_name": product['productId']
+                            })
 
             languages = []
             # Get possible languages
-            for depot in self.meta["depots"]:
+            depots_array = self.meta['depots'] if self.depot_version == 2 else self.meta['product']['depots']
+            for depot in depots_array:
+                if 'redist' in depot:
+                    continue
                 for lang in depot['languages']:
                     if (lang != "*" or lang != "Neutral") and not lang in languages:
                         languages.append(lang)
 
-            print(json.dumps({"download_size": download_size, "disk_size": disk_size, "dlcs": dlcs, "version": self.builds['items'][0]["build_id"], "languages": languages, "folder_name": self.meta["installDirectory"]}))
+            print(json.dumps({"download_size": download_size, "disk_size": disk_size, "dlcs": dlcs, "version": self.builds['items'][0]["build_id"], "languages": languages, "folder_name": self.meta["installDirectory"] if self.depot_version == 2 else self.meta['product']['installDirectory']}))
 
     def get_download_metadata(self, args):
 
@@ -132,28 +136,45 @@ class DownloadManager():
         dependency_files = []
 
         owned_dlcs = []
-        for dlc in self.meta['products']:
-            if dlc['productId'] != self.meta['baseProductId']:
-                if self.api_handler.does_user_own(dlc['productId']):
-                    owned_dlcs.append(dlc['productId'])
+        if self.depot_version == 2:
+            if self.meta.get('products'):
+                for dlc in self.meta['products']:
+                    if dlc['productId'] != self.meta['baseProductId']:
+                        if self.api_handler.does_user_own(dlc['productId']):
+                            owned_dlcs.append(dlc['productId'])
+            for depot in self.meta['depots']:
+                if str(depot['productId']) == str(self.dl_target['id']) or (self.dlcs_should_be_downloaded and depot['productId'] in owned_dlcs):
+                    # TODO: Respect user language
+                    newObject = objects.Depot(self.lang, depot)
+                    if newObject.check_language():
+                        collected_depots.append(newObject)
+        else:
+            if self.meta['product'].get('gameIDs'):
+                for dlc in self.meta['product']['gameIDs']:
+                    if dlc['gameID'] != self.meta['product']['rootGameID']:
+                        if self.api_handler.does_user_own(dlc['gameID']):
+                            owned_dlcs.append(dlc['gameID'])
+            for depot in self.meta['product']['depots']:
+                if not 'redist' in depot:
+                    depot_object = objects.DepotV1(self.lang, depot)
+                    if depot_object.check_language():
+                        collected_depots.append(depot_object)
+                else:
+                    dependency_object = objects.DependencyV1(depot)
+                    dependency_files.append(dependency_object)
 
-        for depot in self.meta['depots']:
-            if str(depot['productId']) == str(self.dl_target['id']) or (self.dlcs_should_be_downloaded and depot['productId'] in owned_dlcs):
-                # TODO: Respect user language
-                newObject = objects.Depot(self.lang, depot)
-                if newObject.check_language():
-                    collected_depots.append(newObject)
+        
         self.logger.debug(
             f"Collected {len(collected_depots)} depots, proceeding to download, Dependencies Depots: {len(self.dependencies)}")
-
-        for depot in collected_depots:
-            manifest = dl_utils.get_zlib_encoded(
-                self.api_handler, f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}')
-            download_files += self.get_depot_list(manifest)
-        for depot in self.dependencies:
-            manifest = dl_utils.get_zlib_encoded(
-                self.api_handler, f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}')
-            dependency_files += self.get_depot_list(manifest)
+        if self.depot_version == 2:
+            for depot in collected_depots:
+                manifest = dl_utils.get_zlib_encoded(
+                    self.api_handler, f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}')
+                download_files += self.get_depot_list(manifest)
+            for depot in self.dependencies:
+                manifest = dl_utils.get_zlib_encoded(
+                    self.api_handler, f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}')
+                dependency_files += self.get_depot_list(manifest)
         return [download_files, dependency_files]
     # V2 downloading
     def perform_download(self):
@@ -285,12 +306,17 @@ class DownloadManager():
         for file in files:
             if type(file) == objects.DepotFile:
                 for chunk in file.chunks:
-                    download_size+=int(chunk['compressedSize'])
+                    download_size+=int(chunk.get('compressedSize'))
                     disk_size+=int(chunk['size'])
 
         for dependency in dependencies:
-            for chunk in dependency.chunks:
-                download_size+=int(chunk['compressedSize'])
-                disk_size+=int(chunk['size'])
+            if self.depot_version == 2:
+                for chunk in dependency.chunks:
+                    download_size+=int(chunk.get('compressedSize'))
+                    disk_size+=int(chunk['size'])
+            else:
+                disk_size+=dependency.size
 
+        if self.depot_version == 1:
+            download_size = disk_size
         return (download_size, disk_size)
