@@ -3,6 +3,7 @@ import zlib
 import os
 import gogdl.constants as constants
 import hashlib
+import shutil
 
 def get_json(api_handler, url):
     x = api_handler.session.get(url)
@@ -116,3 +117,12 @@ def get_readable_size(size):
         size /= power
         n += 1
     return size, power_labels[n]+'B'
+
+def check_free_space(size, path):
+    # If Heroic download will fail, it's probably due path not existing
+    # Be aware of that
+    if os.path.exists(path):
+        _,_,available_space = shutil.disk_usage(path)
+
+        return size < available_space
+    return False

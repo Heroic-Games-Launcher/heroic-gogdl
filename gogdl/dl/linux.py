@@ -7,8 +7,8 @@ import sys
 def download(id, api_handler):
 	game_details = api_handler.get_game_details(id)
 	downloads = game_details['downloads']
-	print("Linux downloads are not implemented yet")
-	sys.exit(0)
+	print("ERROR: Linux downloads are not implemented yet")
+	sys.exit(1)
     
 	"""
     "downloads": [

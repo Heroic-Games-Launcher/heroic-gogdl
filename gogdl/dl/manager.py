@@ -81,7 +81,7 @@ class DownloadManager():
         except AttributeError:
             pass
         is_compatible = self.check_compatibility()
-        self.logger.info(f'Game is {"compatible" if is_compatible else "incompatible"}')
+        self.logger.info(f'Game is compatible') if is_compatible else self.logger.error(f'Game is incompatible')
         if not is_compatible:
             return False
         if self.platform == 'linux':
@@ -117,9 +117,9 @@ class DownloadManager():
         self.meta = dl_utils.get_zlib_encoded(self.api_handler, meta_url)
         install_directory = self.meta['installDirectory'] if self.depot_version == 2 else self.meta['product']['installDirectory']
         try:
-            self.dl_path = args.path
+            self.path = args.path
             self.dl_path = os.path.join(
-                self.dl_path, install_directory)
+                self.path, install_directory)
         except AttributeError:
             pass
         
@@ -200,7 +200,10 @@ class DownloadManager():
         readable_disk_size = dl_utils.get_readable_size(disk_size)
         self.logger.info(f"Download size: {round(readable_download_size[0], 2)}{readable_download_size[1]}")
         self.logger.info(f"Size on disk: {round(readable_disk_size[0], 2)}{readable_disk_size[1]}")
-
+        self.logger.info("Checking free disk space")
+        if not dl_utils.check_free_space(disk_size, self.path):
+            self.logger.error("Not enough available disk space")
+            return False
         allowed_threads = max(1, cpu_count())
         self.logger.debug("Spawning progress bar process")
         self.progress = ProgressBar(download_size, f"{round(readable_download_size[0], 2)}{readable_download_size[1]}", 50)
@@ -233,8 +236,8 @@ class DownloadManager():
 
     def perform_download_V1(self):
         self.logger.debug("Redirecting download to V1 handler")
-        self.logger.info("Currently V1 Depots are not supported yet.")
-        exit(0)
+        self.logger.error("Currently V1 Depots are not supported yet.")
+        exit(1)
         collected_depots = []
         download_files = []
         dependencies = []
