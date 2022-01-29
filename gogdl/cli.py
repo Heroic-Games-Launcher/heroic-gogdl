@@ -3,6 +3,7 @@ import gogdl.args as args
 from gogdl.dl import manager
 import gogdl.api as api
 import gogdl.imports as imports
+import gogdl.launch as launch
 import logging
 
 logging.basicConfig(
@@ -20,7 +21,8 @@ def main():
     switcher = {
         "download": download_manager.download,
         "import": imports.get_info,
-        "info": download_manager.calculate_download_size
+        "info": download_manager.calculate_download_size,
+        "launch": launch.launch
     }
 
     function = switcher.get(arguments.command)

@@ -1,5 +1,6 @@
 # Initialize argparse module and return arguments
 import argparse
+import sys
 
 def init_parser():
     parser = argparse.ArgumentParser(description='GOG downloader for Heroic Games Launcher')
@@ -26,5 +27,14 @@ def init_parser():
     calculate_size_parser.add_argument('--lang', '-l', help='Specify game language')
 
 
+    launch_parser = subparsers.add_parser('launch', help='Launch the game in specified path')
+    launch_parser.add_argument('path')
+    launch_parser.add_argument('id')
+    launch_parser.add_argument('--platform', '--os',dest='platform', help='Target opearting system', choices=['windows', 'osx', 'linux'], required=True)
+    launch_parser.add_argument('--no-wine', action='store_true', dest='dont_use_wine', default=False)
+    launch_parser.add_argument('--wine', dest='wine', help='Specify wine bin path')
+    launch_parser.add_argument('--wine-prefix', dest='wine_prefix')
+    launch_parser.add_argument('--wrapper', dest='wrapper')
+    launch_parser.add_argument('--token', '-t', dest='token', help='Provide access_token', required=False)
     # TODO Create parser
     return parser.parse_args()
