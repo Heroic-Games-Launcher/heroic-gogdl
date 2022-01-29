@@ -119,10 +119,8 @@ def get_readable_size(size):
     return size, power_labels[n]+'B'
 
 def check_free_space(size, path):
-    # If Heroic download will fail, it's probably due path not existing
-    # Be aware of that
-    if os.path.exists(path):
-        _,_,available_space = shutil.disk_usage(path)
+    if not os.path.exists(path):
+        os.makedirs(path,exist_ok=True)
+    _,_,available_space = shutil.disk_usage(path)
 
-        return size < available_space
-    return False
+    return size < available_space
