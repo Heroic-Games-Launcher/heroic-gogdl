@@ -118,8 +118,11 @@ class DownloadManager():
         install_directory = self.meta['installDirectory'] if self.depot_version == 2 else self.meta['product']['installDirectory']
         try:
             self.path = args.path
-            self.dl_path = os.path.join(
-                self.path, install_directory)
+            if args.command == 'download':
+                self.dl_path = os.path.join(
+                    self.path, install_directory)
+            else:
+                self.dl_path = self.path
         except AttributeError:
             pass
         
