@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger('MAIN')
 
 def main():
-    arguments = args.init_parser()
+    arguments, unknown_args = args.init_parser()
     logger.debug(arguments)
     api_handler = api.ApiHandler(arguments.token)
     download_manager = manager.DownloadManager(api_handler)
@@ -27,7 +27,7 @@ def main():
 
     function = switcher.get(arguments.command)
     if function:
-        function(arguments)
+        function(arguments, unknown_args)
 
 if __name__ == "__main__":
     main()

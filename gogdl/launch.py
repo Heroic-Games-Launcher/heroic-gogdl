@@ -2,34 +2,42 @@ import os
 import json
 import sys
 import subprocess
+import shlex
 
 # Supports launching linux builds
-def launch(arguments):
+def launch(arguments, unknown_args):
     print(arguments)
     info = load_game_info(arguments.path, arguments.id, arguments.platform)
 
-    wrapper = ''
+    wrapper = []
     envvars = {}
 
-    if arguments.dont_use_wine or sys.platform == 'win32':
-        wrapper = arguments.wrapper
+    if arguments.dont_use_wine == True or sys.platform == 'win32':
+        wrapper_arg = arguments.wrapper
+        wrapper = shlex.split(wrapper_arg)
     else:
         envvars['WINEPREFIX'] = arguments.wine_prefix
-        wrapper = f'{arguments.wine}'
+        wrapper = [arguments.wine]
 
     primary_task = get_primary_task(info)
     launch_arguments = primary_task.get('arguments')
+    compatibility_flags = primary_task.get('compatibilityFlags')
     executable = os.path.join(arguments.path, primary_task['path'])
     if launch_arguments is None:
         launch_arguments = []
+        
+    if compatibility_flags is None:
+        compatibility_flags = []
+
     command = list()
-    command.append(wrapper)
+    command.extend(wrapper)
     command.append(executable)
     command.extend(launch_arguments)
-    
+    command.extend(unknown_args)
+    # command.append(compatibility_flags)
+
     enviroment = os.environ.copy()
     enviroment.update(envvars)
-    
 
     subprocess.Popen(command, cwd=arguments.path, env=enviroment)
 

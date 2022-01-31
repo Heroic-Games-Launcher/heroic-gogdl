@@ -4,7 +4,7 @@ import json
 import logging
 from sys import exit
 
-def get_info(args):
+def get_info(args, unknown_args):
     logger = logging.getLogger("IMPORT")
     path = args.path
     if not os.path.exists(path):

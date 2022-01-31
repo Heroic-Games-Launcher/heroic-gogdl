@@ -37,4 +37,4 @@ def init_parser():
     launch_parser.add_argument('--wrapper', dest='wrapper')
     launch_parser.add_argument('--token', '-t', dest='token', help='Provide access_token', required=False)
     # TODO Create parser
-    return parser.parse_args()
+    return parser.parse_known_args()

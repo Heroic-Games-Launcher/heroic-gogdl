@@ -25,7 +25,7 @@ class DownloadManager():
         self.threads = []
         self.platform = "windows" if platform == "win32" else "osx" if platform == "darwin" else "linux"
 
-    def download(self, args):
+    def download(self, args, unknown_args):
         if self.get_download_metadata(args):
             if self.perform_download():
                 exit(0)
@@ -34,7 +34,7 @@ class DownloadManager():
         else:
             exit(1)
 
-    def calculate_download_size(self, args):
+    def calculate_download_size(self, args, unknown_args):
         if self.get_download_metadata(args):
             files = self.collect_depots()
             download_files = files[0]
