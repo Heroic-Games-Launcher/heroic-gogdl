@@ -42,11 +42,11 @@ class DepotV1():
     def check_language(self):
         status = True
         for lang in self.languages:
-            status = lang == "Neutral" or lang == "English"
+            status = lang == "Neutral" or lang == self.target_lang
         return status
 
 class DependencyV1():
     def __init__(self, data):
         self.id = data['redist']
-        self.size = int(data['size'])
+        self.size = data.get('size')
         self.target_dir = data['targetDir']

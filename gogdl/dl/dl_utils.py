@@ -38,22 +38,30 @@ def galaxy_path(manifest: str):
 
 
 def get_secure_link(api_handler, path, gameId, generation=2):
-    r = api_handler.session.get(f'https://content-system.gog.com/products/{gameId}/secure_link?_version=2&generation=2&path={path}')
+    url = ''
+    if generation == 2:
+        url = f'{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&generation=2&path={path}'
+    elif generation == 1:
+        url = f'{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&type=depot&path={path}'
+    r = api_handler.session.get(url)
     if not r.ok:
-       if api_handler.is_expired():
-            api_handler._refresh_token()
-            return get_secure_link(api_handler,path, gameId)
+            print(f'ERROR getting secure link for {path}')
     js = r.json()
 
     endpoint = classify_cdns(js['urls'], generation)
     url_format = endpoint['url_format']
     parameters = endpoint['parameters']
+    if generation == 1:
+        if parameters.get('path'):
+            parameters['path'] = parameters['path']+'/main.bin'
+
     url = merge_url_with_params(url_format, parameters)
-    
+
     return url
 
-def get_dependency_link(api_handler, path):
-    data = get_json(api_handler, f'https://content-system.gog.com/open_link?generation=2&_version=2&path=/dependencies/store/' + path)
+
+def get_dependency_link(api_handler):
+    data = get_json(api_handler, f'https://content-system.gog.com/open_link?generation=2&_version=2&path=/dependencies/store/')
     endpoint = classify_cdns(data['urls'])
     url = endpoint['url']
     return url
@@ -124,3 +132,8 @@ def check_free_space(size, path):
     _,_,available_space = shutil.disk_usage(path)
 
     return size < available_space
+
+def get_range_header(offset, size):
+    from_value = offset
+    to_value = (int(offset) + int(size))-1
+    return f'bytes={from_value}-{to_value}'

@@ -35,7 +35,7 @@ class DLWorker():
             md5 = chunk['md5']
             self.downloaded_size = chunk['compressedSize']
             if is_dependency:
-                url = dl_utils.get_dependency_link(self.api_handler, dl_utils.galaxy_path(compressed_md5))
+                url = dl_utils.dependency_link(self.api_handler, dl_utils.galaxy_path(compressed_md5))
             else:
                 url = dl_utils.get_secure_link(self.api_handler, dl_utils.galaxy_path(compressed_md5), self.gameId)
             download_path = os.path.join(
@@ -101,3 +101,61 @@ class DLWorker():
             return calculated == should_be
         else:
             return False
+
+class DLWorkerV1():
+    def __init__(self, data, path, download_link, api_handler, gameId, submit_downloaded_size):
+        self.data = data
+        self.path = path
+        self.api_handler = api_handler
+        self.submit_downloaded_size = submit_downloaded_size
+        self.gameId = gameId
+        self.completed = False
+        self.logger = logging.getLogger("DOWNLOAD_WORKER_V1")
+        self.download_link = download_link
+        self.downloaded_size = 0
+    
+    def do_stuff(self, is_dependency=False):
+        if self.data['path'].startswith('/'):
+            self.data['path'] = self.data['path'][1:]
+        item_path = os.path.join(self.path, self.data['path'])
+        if self.verify_file(item_path):
+            self.completed = True 
+            if not is_dependency:
+                self.submit_downloaded_size(int(self.data['size']))
+            return
+        else:
+            if os.path.exists(item_path):
+                os.remove(item_path)
+        dl_utils.prepare_location(
+                dl_utils.parent_dir(item_path), self.logger)
+        self.get_file(item_path)
+        if not is_dependency:
+            self.submit_downloaded_size(int(self.data['size']))
+
+    def get_file(self, item_path):
+        headers = {
+            "Range": dl_utils.get_range_header(self.data['offset'], self.data['size'])
+        }
+        with open(item_path, 'ab') as f:
+            response = self.api_handler.session.get(self.download_link, headers=headers, stream=True, allow_redirects=True)
+            total = response.headers.get('Content-Length')
+            if total is None:
+                f.write(response.content)
+            else:
+                total = int(total)
+                for data in response.iter_content(chunk_size=max(int(total/1000), 1024*1024)):
+                    f.write(data)
+            f.close()
+            if os.path.exists(item_path):
+                if not self.verify_file(item_path):
+                    self.logger.warning(f'Checksums dismatch for compressed chunk of {item_path}')
+                    os.remove(item_path)
+                    self.get_file(item_path)
+
+    def verify_file(self, item_path):
+        if os.path.exists(item_path):
+            calculated = dl_utils.calculate_sum(item_path, hashlib.md5)
+            should_be = self.data['hash']
+            return calculated == should_be
+        return False
+    

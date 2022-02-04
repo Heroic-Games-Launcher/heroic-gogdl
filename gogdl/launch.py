@@ -52,7 +52,7 @@ def load_game_info(path, id, platform):
     filename = f'goggame-{id}.info'
     abs_path = (os.path.join(path, filename) if platform == "windows" else os.path.join(path, 'game', filename)) if platform != "osx" else os.path.join(path, 'Contents', 'Resources', filename)
     if not os.path.isfile(abs_path):
-        exit(1)
+        sys.exit(1)
     with open(abs_path) as f:
         data = f.read()
         f.close()

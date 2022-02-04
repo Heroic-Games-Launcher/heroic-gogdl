@@ -29,16 +29,17 @@ class ApiHandler():
         if response.ok:
             return response.json()    
 
-    def get_dependenices_list(self):
+    def get_dependenices_list(self, depot_version=2):
         self.logger.info("Getting Dependencies repository")
-        response = self.session.get(constants.DEPENDENCIES_URL)
+        url = constants.DEPENDENCIES_URL if depot_version == 2 else constants.DEPENDENCIES_V1_URL
+        response = self.session.get(url)
         if not response.ok:
             return None
         
         json_data = json.loads(response.content)
         if 'repository_manifest' in json_data:
             self.logger.info("Getting repository manifest")
-            return get_zlib_encoded(self, str(json_data['repository_manifest']))
+            return get_zlib_encoded(self, str(json_data['repository_manifest'])), json_data.get('version')
 
     def does_user_own(self, id):
         game_details = self.get_game_details(id)
