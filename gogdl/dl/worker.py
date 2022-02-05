@@ -19,6 +19,7 @@ class DLWorker():
         self.downloaded_size = 0
         
     def do_stuff(self, is_dependency=False):
+        self.is_dependency = is_dependency
         item_path = os.path.join(self.path, self.data.path)
         if self.verify_file(item_path):
             size = 0
@@ -27,8 +28,10 @@ class DLWorker():
             self.submit_downloaded_size(size)
             self.completed = True
             return
+
         if os.path.exists(item_path):
             os.remove(item_path)
+
         for index in range(len(self.data.chunks)):
             chunk = self.data.chunks[index]
             compressed_md5 = chunk['compressedMd5']
@@ -44,6 +47,7 @@ class DLWorker():
                 dl_utils.parent_dir(download_path), self.logger)
             self.get_file(url, download_path, compressed_md5, md5, index)
             self.submit_downloaded_size(self.downloaded_size)
+        
         for index in range(len(self.data.chunks)):
             path = os.path.join(self.path, self.data.path)
             self.decompress_file(path+f'.tmp{index}', path)
@@ -59,11 +63,23 @@ class DLWorker():
             f.close()
             file.close()
             os.remove(compressed)
+        else:
+            if self.is_dependency:
+                url = dl_utils.dependency_link(self.api_handler, dl_utils.galaxy_path(compressed_md5))
+            else:
+                url = dl_utils.get_secure_link(self.api_handler, dl_utils.galaxy_path(compressed_md5), self.gameId)
+            dl_utils.prepare_location(
+                dl_utils.parent_dir(compressed), self.logger)
+            self.get_file(url, compressed, compressed_md5, md5, index)
+            return self.decompress_file(compressed, decompressed)
 
-    def get_file(self, url, path, compressed_sum='', decompressed_sum='', index=0):
+    def get_file(self, url, path, compressed_sum, decompressed_sum, index=0):
         isExisting = os.path.exists(path)
         if isExisting:
-            os.remove(path)
+            if dl_utils.calculate_sum(path, hashlib.md5) != compressed_sum:
+                os.remove(path)
+            else:
+                return
         with open(path, 'ab') as f:
             response = self.api_handler.session.get(
                 url, stream=True, allow_redirects=True)
@@ -89,15 +105,20 @@ class DLWorker():
             calculated = None
             should_be = None
             if len(self.data.chunks) > 1:
-                if data.md5:
-                    should_be = data.md5
+                if self.data.md5:
+                    should_be = self.data.md5
                     calculated = dl_utils.calculate_sum(item_path, hashlib.md5)
-                elif data.sha256:
-                    should_be = data.sha256
+                elif self.data.sha256:
+                    should_be = self.data.sha256
                     calculated = dl_utils.calculate_sum(item_path, hashlib.sha256)
             else:
-                calculated = dl_utils.calculate_sum(item_path, hashlib.md5)
-                should_be = self.data.chunks[0]['md5']
+                # In case if there are sha256 sums in chunks
+                if 'sha256' in self.data.chunks[0]:
+                    calculated = dl_utils.calculate_sum(item_path, hashlib.sha256)
+                    should_be = self.data.chunks[0]['sha256']
+                elif 'md5' in self.data.chunks[0]:
+                    calculated = dl_utils.calculate_sum(item_path, hashlib.md5)
+                    should_be = self.data.chunks[0]['md5']
             return calculated == should_be
         else:
             return False
@@ -148,7 +169,7 @@ class DLWorkerV1():
             f.close()
             if os.path.exists(item_path):
                 if not self.verify_file(item_path):
-                    self.logger.warning(f'Checksums dismatch for compressed chunk of {item_path}')
+                    self.logger.warning(f'Checksums dismatch for file {item_path}')
                     os.remove(item_path)
                     self.get_file(item_path)
 
