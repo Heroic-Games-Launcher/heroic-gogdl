@@ -25,7 +25,8 @@ def launch(arguments, unknown_args):
     executable = os.path.join(arguments.path, primary_task['path'])
     if launch_arguments is None:
         launch_arguments = []
-        
+    if type(launch_arguments) == str:
+        launch_arguments = shlex.split(launch_arguments)
     if compatibility_flags is None:
         compatibility_flags = []
 
@@ -38,7 +39,6 @@ def launch(arguments, unknown_args):
 
     enviroment = os.environ.copy()
     enviroment.update(envvars)
-
     subprocess.Popen(command, cwd=arguments.path, env=enviroment)
 
 
