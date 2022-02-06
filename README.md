@@ -9,8 +9,7 @@ This will take care of downloading games from GOG in Heroic.
 
 # TODO LIST:
 - check if there are games that still use V1 depots and have DLCs downloadable
-- Fix V1 depots not displaying install size
-
+- return meta Etag when downloading games, to check for updates in the future
 
 ## Great resources about GOG API
 - https://github.com/Sude-/lgogdownloader
