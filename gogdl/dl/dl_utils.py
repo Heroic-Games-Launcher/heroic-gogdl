@@ -55,13 +55,13 @@ def get_secure_link(api_handler, path, gameId, generation=2):
         if parameters.get('path'):
             parameters['path'] = parameters['path']+'/main.bin'
 
-    url = merge_url_with_params(url_format, parameters)
+        return merge_url_with_params(url_format, parameters)
 
-    return url
+    return endpoint
 
 
-def get_dependency_link(api_handler):
-    data = get_json(api_handler, f'https://content-system.gog.com/open_link?generation=2&_version=2&path=/dependencies/store/')
+def get_dependency_link(api_handler, path):
+    data = get_json(api_handler, f'{constants.GOG_CONTENT_SYSTEM}/open_link?generation=2&_version=2&path=/dependencies/store/' + path)
     endpoint = classify_cdns(data['urls'])
     url = endpoint['url']
     return url
@@ -84,9 +84,9 @@ def classify_cdns(array, generation=2):
         score = 0
         endpoint_name = item['endpoint_name']
         # Some CDNS are failing to process a request propertly
-        cdn = filterCdns(endpoint_name, constants.GALAXY_CDNS)
-        if cdn:
-            cdns.append(item)
+        # cdn = filterCdns(endpoint_name, constants.GALAXY_CDNS)
+        # if cdn:
+        cdns.append(item)
     best = None
     for cdn in cdns:
         if not generation in cdn['supports_generation']:
@@ -100,11 +100,11 @@ def classify_cdns(array, generation=2):
     return best
 
         
-def filterCdns(string,  options):
-    for option in options:
-        if string == option:
-            return True
-    return False 
+# def filterCdns(string,  options):
+#     for option in options:
+#         if string == option:
+#             return True
+#     return False 
 
 def calculate_sum(path, function):
     with open(path, 'rb') as f:

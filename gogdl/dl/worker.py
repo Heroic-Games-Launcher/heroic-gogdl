@@ -1,5 +1,6 @@
 from threading import Thread
 from gogdl.dl import objects, dl_utils
+from copy import copy
 import hashlib
 import zlib
 import time
@@ -8,13 +9,14 @@ import os
 
 
 class DLWorker():
-    def __init__(self, data, path, api_handler, gameId, submit_downloaded_size):
+    def __init__(self, data, path, api_handler, gameId, submit_downloaded_size, endpoint):
         self.data = data
         self.path = path
         self.api_handler = api_handler
         self.submit_downloaded_size = submit_downloaded_size
         self.gameId = gameId
         self.completed = False
+        self.endpoint = endpoint
         self.logger = logging.getLogger("DOWNLOAD_WORKER")
         self.downloaded_size = 0
         
@@ -38,9 +40,11 @@ class DLWorker():
             md5 = chunk['md5']
             self.downloaded_size = chunk['compressedSize']
             if is_dependency:
-                url = dl_utils.dependency_link(self.api_handler, dl_utils.galaxy_path(compressed_md5))
+                url = dl_utils.get_dependency_link(self.api_handler, dl_utils.galaxy_path(compressed_md5))
             else:
-                url = dl_utils.get_secure_link(self.api_handler, dl_utils.galaxy_path(compressed_md5), self.gameId)
+                parameters = copy(self.endpoint['parameters'])
+                parameters['path'] += '/' + dl_utils.galaxy_path(compressed_md5)
+                url = dl_utils.merge_url_with_params(self.endpoint['url_format'], parameters)
             download_path = os.path.join(
                 self.path, self.data.path+f'.tmp{index}')
             dl_utils.prepare_location(
@@ -65,7 +69,7 @@ class DLWorker():
             os.remove(compressed)
         else:
             if self.is_dependency:
-                url = dl_utils.dependency_link(self.api_handler, dl_utils.galaxy_path(compressed_md5))
+                url = dl_utils.get_dependency_link(self.api_handler, dl_utils.galaxy_path(compressed_md5))
             else:
                 url = dl_utils.get_secure_link(self.api_handler, dl_utils.galaxy_path(compressed_md5), self.gameId)
             dl_utils.prepare_location(

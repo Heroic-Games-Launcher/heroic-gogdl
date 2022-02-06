@@ -7,4 +7,4 @@ DEPENDENCIES_URL = 'https://content-system.gog.com/dependencies/repository?gener
 DEPENDENCIES_V1_URL = 'https://content-system.gog.com/redists/repository'
 
 # Allowed CDN list others might cause problems (Needs more testing)
-GALAXY_CDNS = ["edgecast", "high_winds", "lumen"]
+# GALAXY_CDNS = ["edgecast", "high_winds", "lumen"]
