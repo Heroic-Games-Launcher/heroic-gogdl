@@ -10,7 +10,6 @@ def get_info(args, unknown_args):
     if not os.path.exists(path):
         logger.error("Provided path is invalid!")
         exit(1)
-    logger.info("Looking for goggame-*.info file")
     game_details = load_game_details(path)
 
     info_file = game_details[0]
@@ -21,9 +20,15 @@ def get_info(args, unknown_args):
     f.close()
 
 
-    logger.info(f'Found \"{info["name"]}\" platform: {platform}')
-    game_id = info['gameId']
+    game_id = info['rootGameId']
     build_id = info.get("buildId")
+    installed_language = ""
+    if 'languages' in info:
+        installed_language = info['languages'][0]
+    elif 'language' in info:
+        installed_language = info['language']
+    else:
+        installed_language = 'en-US'
     if build_id_file:
         f = open(build_id_file, 'r')
         build = json.loads(f.read())
@@ -33,7 +38,8 @@ def get_info(args, unknown_args):
         "appName": game_id,
         "buildId": build_id,
         "title": info['name'],
-        "tasks": info["playTasks"]
+        "tasks": info["playTasks"],
+        "installedLanguage": installed_language
     }))
 
 def load_game_details(path):
@@ -44,5 +50,9 @@ def load_game_details(path):
         found = glob.glob(os.path.join(path, "Contents", "Resources", 'goggame-*.info'))
         build_id = glob.glob(os.path.join(path, "Contents", "Resources", 'goggame-*.id'))
         platform='osx'
+    if not found:
+        found = glob.glob(os.path.join(path,'game', 'goggame-*.info'))
+        build_id = glob.glob(os.path.join(path, "game", 'goggame-*.id'))
+        platform = 'linux'
     ## TODO: Add detection for Linux titles
     return (found[0], build_id[0] if build_id else None, platform)

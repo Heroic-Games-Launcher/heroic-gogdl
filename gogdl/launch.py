@@ -12,10 +12,16 @@ def launch(arguments, unknown_args):
     wrapper = []
     envvars = {}
 
+    unified_platform = {
+        'win32':'windows',
+        'darwin':'osx',
+        'linux':'linux'
+    }
+
     if arguments.dont_use_wine == True or sys.platform == 'win32':
         wrapper_arg = arguments.wrapper
         wrapper = shlex.split(wrapper_arg)
-    else:
+    elif arguments.platform != unified_platform[sys.platform]:
         envvars['WINEPREFIX'] = arguments.wine_prefix
         wrapper = [arguments.wine]
 
@@ -23,6 +29,8 @@ def launch(arguments, unknown_args):
     launch_arguments = primary_task.get('arguments')
     compatibility_flags = primary_task.get('compatibilityFlags')
     executable = os.path.join(arguments.path, primary_task['path'])
+    if arguments.platform == 'linux':
+        executable = os.path.join(arguments.path, 'game', primary_task['path'])
     if launch_arguments is None:
         launch_arguments = []
     if type(launch_arguments) == str:
@@ -31,7 +39,8 @@ def launch(arguments, unknown_args):
         compatibility_flags = []
 
     command = list()
-    command.extend(wrapper)
+    if len(wrapper) > 0 and wrapper[0] is not None:
+        command.extend(wrapper)
     command.append(executable)
     command.extend(launch_arguments)
     command.extend(unknown_args)
