@@ -39,12 +39,13 @@ def get_info(args, unknown_args):
         "buildId": build_id,
         "title": info['name'],
         "tasks": info["playTasks"],
-        "installedLanguage": installed_language
+        "installedLanguage": installed_language,
+        "platform":platform
     }))
 
 def load_game_details(path):
     found = glob.glob(os.path.join(path, 'goggame-*.info'))
-    build_id = None
+    build_id = glob.glob(os.path.join(path, 'goggame-*.id'))
     platform = "windows"
     if not found:
         found = glob.glob(os.path.join(path, "Contents", "Resources", 'goggame-*.info'))
