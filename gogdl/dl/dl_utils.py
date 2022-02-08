@@ -24,7 +24,7 @@ def get_zlib_encoded(api_handler, url):
     return decompressed
 
 
-def prepare_location(path, logger):
+def prepare_location(path, logger=None):
     os.makedirs(path, exist_ok=True)
     if logger:
         logger.debug(f'Created directory {path}')

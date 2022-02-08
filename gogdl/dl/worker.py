@@ -6,7 +6,7 @@ import zlib
 import time
 import logging
 import os
-
+from gogdl.dl.objects import DepotDirectory
 
 class DLWorker():
     def __init__(self, data, path, api_handler, gameId, submit_downloaded_size, endpoint):
@@ -23,6 +23,14 @@ class DLWorker():
     def do_stuff(self, is_dependency=False):
         self.is_dependency = is_dependency
         item_path = os.path.join(self.path, self.data.path)
+        if type(self.data) == DepotDirectory:
+            dl_utils.prepare_location(item_path)
+            return
+        if self.data.flags and 'support' in self.data.flags:
+            item_path = os.path.join(self.path, '__support', self.gameId, self.data.path.replace('add/',''))
+        if type(self.data) == DepotDirectory:
+            dl_utils.prepare_location(item_path)
+            return
         if self.verify_file(item_path):
             size = 0
             for chunk in self.data.chunks:
@@ -45,16 +53,14 @@ class DLWorker():
                 parameters = copy(self.endpoint['parameters'])
                 parameters['path'] += '/' + dl_utils.galaxy_path(compressed_md5)
                 url = dl_utils.merge_url_with_params(self.endpoint['url_format'], parameters)
-            download_path = os.path.join(
-                self.path, self.data.path+f'.tmp{index}')
+            download_path = os.path.join(item_path+f'.tmp{index}')
             dl_utils.prepare_location(
                 dl_utils.parent_dir(download_path), self.logger)
             self.get_file(url, download_path, compressed_md5, md5, index)
             self.submit_downloaded_size(self.downloaded_size)
         
         for index in range(len(self.data.chunks)):
-            path = os.path.join(self.path, self.data.path)
-            self.decompress_file(path+f'.tmp{index}', path)
+            self.decompress_file(item_path+f'.tmp{index}', item_path)
         self.completed = True
 
 

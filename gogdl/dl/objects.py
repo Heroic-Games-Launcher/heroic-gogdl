@@ -2,6 +2,7 @@ class DepotFile():
     def __init__(self, item_data):
         self.path = item_data['path'].replace('\\', '/')
         self.chunks = item_data['chunks']
+        self.flags = item_data.get('flags')
         self.md5 = item_data.get('md5')
         self.sha256 = item_data.get('sha256')
 

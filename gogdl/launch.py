@@ -45,10 +45,12 @@ def launch(arguments, unknown_args):
     command.extend(launch_arguments)
     command.extend(unknown_args)
     # command.append(compatibility_flags)
+    
+    working_dir = os.path.join(arguments.path, primary_task['workingDir'] if primary_task.get('workingDir') else '')
 
     enviroment = os.environ.copy()
     enviroment.update(envvars)
-    subprocess.Popen(command, cwd=arguments.path, env=enviroment)
+    subprocess.Popen(command, cwd=working_dir, env=enviroment)
 
 
 def get_primary_task(info):
