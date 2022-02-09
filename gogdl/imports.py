@@ -34,13 +34,28 @@ def get_info(args, unknown_args):
         build = json.loads(f.read())
         f.close()
         build_id = build.get("buildId")
+
+    version_name = build_id
+    if build_id and platform != 'linux':
+        # Get version name
+        builds = dl_utils.get_json(
+            self.api_handler, f'{constants.GOG_CONTENT_SYSTEM}/products/{self.dl_target["id"]}/os/{self.platform}/builds?generation=2')
+
+        target_build = builds['items'][0]
+        for build in builds['items']:
+            if build['build_id'] == build_id:
+                target_build = build
+                break
+        version_name = target_build['version_name']
+
     print(json.dumps({
         "appName": game_id,
         "buildId": build_id,
         "title": info['name'],
         "tasks": info["playTasks"],
         "installedLanguage": installed_language,
-        "platform":platform
+        "platform":platform,
+        "versionName":version_name
     }))
 
 def load_game_details(path):
@@ -55,5 +70,4 @@ def load_game_details(path):
         found = glob.glob(os.path.join(path,'game', 'goggame-*.info'))
         build_id = glob.glob(os.path.join(path, "game", 'goggame-*.id'))
         platform = 'linux'
-    ## TODO: Add detection for Linux titles
     return (found[0], build_id[0] if build_id else None, platform)

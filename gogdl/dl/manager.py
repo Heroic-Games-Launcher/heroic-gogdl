@@ -64,7 +64,15 @@ class DownloadManager():
                     if ((lang != "*") and (lang != "Neutral")) and not (lang in languages):
                         languages.append(lang)
 
-            print(json.dumps({"download_size": download_size, "disk_size": disk_size, "dlcs": dlcs, "version": self.builds['items'][0]["build_id"], "languages": languages, "folder_name": self.meta["installDirectory"] if self.depot_version == 2 else self.meta['product']['installDirectory']}))
+            print(json.dumps({"download_size": download_size,
+                "disk_size": disk_size,
+                "dlcs": dlcs,
+                "buildId": self.builds['items'][0]["build_id"],
+                "languages": languages,
+                "folder_name": self.meta["installDirectory"] if self.depot_version == 2 else self.meta['product']['installDirectory'],
+                "versionEtag":self.versionEtag,
+                "versionName":self.versionName
+            }))
 
     def get_download_metadata(self, args):
 
@@ -115,7 +123,10 @@ class DownloadManager():
         
         meta_url = target_build['link']
         self.logger.debug('Getting Meta data')
-        self.meta = dl_utils.get_zlib_encoded(self.api_handler, meta_url)
+        self.meta, headers = dl_utils.get_zlib_encoded(self.api_handler, meta_url)
+
+        self.versionEtag = headers.get("Etag")
+        self.versionName = target_build['version_name']
         install_directory = self.meta['installDirectory'] if self.depot_version == 2 else self.meta['product']['installDirectory']
         try:
             self.path = args.path
@@ -146,6 +157,7 @@ class DownloadManager():
                     if dlc['productId'] != self.meta['baseProductId']:
                         if self.api_handler.does_user_own(dlc['productId']):
                             owned_dlcs.append(dlc['productId'])
+
             for depot in self.meta['depots']:
                 if str(depot['productId']) == str(self.dl_target['id']) or self.dlcs_should_be_downloaded and (depot['productId'] in owned_dlcs):
                     # TODO: Respect user language
@@ -169,11 +181,11 @@ class DownloadManager():
         if self.depot_version == 2:
             for depot in collected_depots:
                 manifest = dl_utils.get_zlib_encoded(
-                    self.api_handler, f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}')
+                    self.api_handler, f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}')[0]
                 download_files += self.get_depot_list(manifest)
             for depot in self.dependencies:
                 manifest = dl_utils.get_zlib_encoded(
-                    self.api_handler, f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}')
+                    self.api_handler, f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}')[0]
                 dependency_files += self.get_depot_list(manifest)
         else:
             for depot in collected_depots:
@@ -235,6 +247,7 @@ class DownloadManager():
         # Main game files
         for file in download_files:
             thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size, endpoint)
+            # thread.do_stuff()
             self.threads.append(self.thpool.submit(thread.do_stuff))
         # Dependencies
         for file in dependency_files:
@@ -317,7 +330,7 @@ class DownloadManager():
                     old_iterator.append(depot)
         
         iterator = self.meta['dependencies'] if self.depot_version == 2 else old_iterator
-        for dependency in (dependencies_json['depots'] if self.depot_version == 2 else dependencies_json['product']['depots']):
+        for dependency in dependencies_json['depots'] if self.depot_version == 2 else dependencies_json['product']['depots']:
             for game_dep in iterator:
                 if self.depot_version == 2:
                     if dependency['dependencyId'] == game_dep:

@@ -5,7 +5,7 @@ import sys
 def init_parser():
     parser = argparse.ArgumentParser(description='GOG downloader for Heroic Games Launcher')
     subparsers = parser.add_subparsers(dest='command', required=True)
-    download_parser = subparsers.add_parser('download', aliases=['repair'], help='Download/update game')
+    download_parser = subparsers.add_parser('download', aliases=['repair', 'update'], help='Download/update/repair game')
     download_parser.add_argument('id', help='Game id')
     download_parser.add_argument('--lang', '-l', help='Specify game language')
     download_parser.add_argument('--build', '-b', dest="build", help='Specify buildId (allows repairing)')

@@ -21,6 +21,7 @@ def main():
     switcher = {
         "download": download_manager.download,
         "repair": download_manager.download,
+        "update": download_manager.download,
         "import": imports.get_info,
         "info": download_manager.calculate_download_size,
         "launch": launch.launch

@@ -1,12 +1,12 @@
 from threading import Thread
 from gogdl.dl import objects, dl_utils
+from gogdl.dl.objects import DepotDirectory
 from copy import copy
 import hashlib
 import zlib
 import time
 import logging
 import os
-from gogdl.dl.objects import DepotDirectory
 
 class DLWorker():
     def __init__(self, data, path, api_handler, gameId, submit_downloaded_size, endpoint):
@@ -27,7 +27,7 @@ class DLWorker():
             dl_utils.prepare_location(item_path)
             return
         if self.data.flags and 'support' in self.data.flags:
-            item_path = os.path.join(self.path, '__support', self.gameId, self.data.path.replace('add/',''))
+            item_path = os.path.join(self.path, 'support', self.gameId, self.data.path)
         if type(self.data) == DepotDirectory:
             dl_utils.prepare_location(item_path)
             return

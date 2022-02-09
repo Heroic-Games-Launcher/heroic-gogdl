@@ -21,7 +21,7 @@ def get_zlib_encoded(api_handler, url):
     except zlib.error:
         return json.loads(x.content)
         pass
-    return decompressed
+    return decompressed, x.headers
 
 
 def prepare_location(path, logger=None):
