@@ -19,7 +19,7 @@ def get_zlib_encoded(api_handler, url):
     try:
         decompressed = json.loads(zlib.decompress(x.content, 15))
     except zlib.error:
-        return json.loads(x.content)
+        return json.loads(x.content), x.headers
         pass
     return decompressed, x.headers
 
