@@ -149,6 +149,8 @@ class DLWorkerV1():
         if self.data['path'].startswith('/'):
             self.data['path'] = self.data['path'][1:]
         item_path = os.path.join(self.path, self.data['path'])
+        if self.data.get('support') == True:
+            item_path = os.path.join(self.path, 'support', self.data['path'])
         if self.verify_file(item_path):
             self.completed = True 
             if not is_dependency:
