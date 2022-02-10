@@ -78,7 +78,10 @@ class DownloadManager():
 
         if args.platform:
             self.platform = args.platform
-        
+        if int(args.workers_count) > 0:
+            self.allowed_threads = int(args.workers_count)
+        else:
+            self.allowed_threads = cpu_count()
         # Getting more and newer data
         self.dl_target = self.api_handler.get_item_data(args.id)
         self.dl_target['id'] = args.id
@@ -237,7 +240,7 @@ class DownloadManager():
         if not dl_utils.check_free_space(disk_size, self.path):
             self.logger.error("Not enough available disk space")
             return False
-        allowed_threads = max(1, cpu_count())
+        allowed_threads = max(1, self.allowed_threads)
         self.logger.debug("Spawning progress bar process")
         self.progress = ProgressBar(download_size, f"{round(readable_download_size[0], 2)}{readable_download_size[1]}", 50)
         self.progress.start()
@@ -285,7 +288,7 @@ class DownloadManager():
         self.logger.info(f"Download size: {round(readable_download_size[0], 2)}{readable_download_size[1]}")
         self.logger.info(f"Size on disk: {round(readable_disk_size[0], 2)}{readable_disk_size[1]}")
 
-        allowed_threads = max(1, cpu_count())
+        allowed_threads = max(1, self.allowed_threads)
         self.thpool = ThreadPoolExecutor(max_workers=allowed_threads)
 
         self.logger.debug("Spawning progress bar process")

@@ -14,6 +14,7 @@ def init_parser():
     download_parser.add_argument('--with-dlcs', dest="dlcs", action="store_true", help='Should download dlcs')
     download_parser.add_argument('--skip-dlcs', dest="dlcs", action="store_false", help='Should skip dlcs')
     download_parser.add_argument('--token', '-t', dest='token',help='Provide access_token', required=True)
+    download_parser.add_argument('--max-workers', dest='workers_count', default=0, help='Specify number of worker threads, by default number of CPU threads')
 
     import_parser = subparsers.add_parser('import', help='Show data about game in the specified path')
     import_parser.add_argument('path')
@@ -25,6 +26,7 @@ def init_parser():
     calculate_size_parser.add_argument('--build', '-b', dest="build", help='Specify buildId')
     calculate_size_parser.add_argument('--token', '-t', dest='token', help='Provide access_token', required=True)
     calculate_size_parser.add_argument('--lang', '-l', help='Specify game language')
+    calculate_size_parser.add_argument('--max-workers', dest='workers_count', default=0, help='Specify number of worker threads, by default number of CPU threads')
 
 
     launch_parser = subparsers.add_parser('launch', help='Launch the game in specified path')
