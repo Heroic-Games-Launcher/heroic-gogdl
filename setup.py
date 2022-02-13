@@ -17,6 +17,4 @@ setup(
         "requests",
         "setuptools"
     ]
-
-
 )
