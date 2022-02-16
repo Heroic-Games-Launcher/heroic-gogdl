@@ -3,6 +3,8 @@ import glob
 import json
 import logging
 from sys import exit
+from gogdl import constants
+import requests
 
 def get_info(args, unknown_args):
     logger = logging.getLogger("IMPORT")
@@ -38,9 +40,8 @@ def get_info(args, unknown_args):
     version_name = build_id
     if build_id and platform != 'linux':
         # Get version name
-        builds = dl_utils.get_json(
-            self.api_handler, f'{constants.GOG_CONTENT_SYSTEM}/products/{self.dl_target["id"]}/os/{self.platform}/builds?generation=2')
-
+        builds_res = requests.get(f'{constants.GOG_CONTENT_SYSTEM}/products/{game_id}/os/{platform}/builds?generation=2')
+        builds = builds_res.json()
         target_build = builds['items'][0]
         for build in builds['items']:
             if build['build_id'] == build_id:
