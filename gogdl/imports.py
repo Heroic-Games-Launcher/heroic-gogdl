@@ -48,6 +48,13 @@ def get_info(args, unknown_args):
                 target_build = build
                 break
         version_name = target_build['version_name']
+    if platform == 'linux' and os.path.exists(os.path.join(path,'gameinfo')):
+        # Linux version installed using installer
+        gameinfo_file = open(os.path.join(path,'gameinfo'),'r')
+        data = gameinfo_file.read()
+        lines = data.split('\n')
+        version_name = lines[1]
+        language = lines[3]
 
     print(json.dumps({
         "appName": game_id,

@@ -7,7 +7,7 @@ import threading
 from time import sleep
 from sys import platform
 from multiprocessing import cpu_count
-from gogdl.dl import dl_utils, objects, linux
+from gogdl.dl import dl_utils, objects, linux_native
 from gogdl.dl.worker import *
 from gogdl.dl.progressbar import ProgressBar
 from concurrent.futures import ThreadPoolExecutor
@@ -92,12 +92,12 @@ class DownloadManager():
             self.dlcs_should_be_downloaded = args.dlcs
         except AttributeError:
             pass
+        if self.platform == 'linux':
+            linux_native.download(self.dl_target['id'], self.api_handler, args)
+            return False
         is_compatible = self.check_compatibility()
         self.logger.info(f'Game is compatible') if is_compatible else self.logger.error(f'Game is incompatible')
         if not is_compatible:
-            return False
-        if self.platform == 'linux':
-            linux.download(self.dl_target['id'], self.api_handler)
             return False
         self.logger.debug('Getting Build data')
         # Builds data
@@ -358,7 +358,6 @@ class DownloadManager():
 
     def check_compatibility(self):
         self.logger.info(f"Checking compatibility of {self.dl_target['title']} with {self.platform}")
-        
         return self.dl_target['content_system_compatibility'][self.platform]
 
     def unpack_v1(self, download_files):

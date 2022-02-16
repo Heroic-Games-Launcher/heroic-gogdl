@@ -16,8 +16,12 @@ class ApiHandler():
             'User-Agent': 'GOGGalaxyClient/2.0.45.61 (GOG Galaxy)'
         }
 
-    def get_item_data(self, id):
-        url = f'{constants.GOG_API}/products/{id}?expanded=changelog'
+    def get_item_data(self, id, expanded=[]):
+        url = f'{constants.GOG_API}/products/{id}'
+        expanded_arg = '?expand='
+        if(len(expanded) > 0):
+            expanded_arg += ','.join(expanded)
+            url += expanded_arg
         response = self.session.get(url)
         self.logger.debug(url)
         if response.ok:
