@@ -50,8 +50,9 @@ def launch(arguments, unknown_args):
 
     enviroment = os.environ.copy()
     enviroment.update(envvars)
-    subprocess.Popen(command, cwd=working_dir, env=enviroment)
-
+    process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
+    status = process.wait()
+    sys.exit(status)
 
 def get_primary_task(info):
     primaryTask = None

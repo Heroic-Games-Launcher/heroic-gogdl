@@ -22,7 +22,7 @@ def download(id, api_handler, arguments):
 	logger = logging.getLogger('LINUX')
 	logger.info("Getting folder name from windows manifest")
 	folder_name = get_folder_name_from_windows_manifest(api_handler, id)
-	install_path = os.path.join(arguments.path, folder_name)
+	install_path = os.path.join(arguments.path, folder_name) if arguments.command == 'download' else str(arguments.path)
 	logger.info("Getting downlad info")
 	game_details = api_handler.get_item_data(id, ['downloads'])
 	installers = game_details['downloads']['installers']
