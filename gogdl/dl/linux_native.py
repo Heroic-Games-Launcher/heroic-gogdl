@@ -16,7 +16,8 @@ def get_folder_name_from_windows_manifest(api_handler, id):
 
 	url = builds['items'][0]['link']
 	meta,headers = dl_utils.get_zlib_encoded(api_handler, url)
-	return meta["installDirectory"]
+	install_dir = meta["installDirectory"] if builds['items'][0]['generation'] == 2 else meta['product']['installDirectory']
+	return install_dir
 
 def download(id, api_handler, arguments):
 	logger = logging.getLogger('LINUX')
@@ -62,6 +63,11 @@ def download(id, api_handler, arguments):
 			logger.warning("Installer integrity invalid, downloading again")
 			success, path = get_file(download['downlink'], constants.CACHE_DIR, api_handler, checksum.attrib['md5'])
 	unpacked_path = os.path.join(constants.CACHE_DIR, 'unpacked')
+	logger.info('Checking available disk space')
+	
+	if not dl_utils.check_free_space(get_installer_unpack_size(path), unpacked_path):
+		logger.error("Not enough available disk space")
+	logger.info("Looks fine continuing")
 	logger.info("Unpacking game files")
 	unpack_installer(path, unpacked_path, logger)
 	
@@ -78,6 +84,18 @@ def download(id, api_handler, arguments):
 
 	logger.info("Done")
 	sys.exit(0)
+
+def get_installer_unpack_size(script_path):
+	# From sharkwouter's minigalaxy code
+	var = subprocess.Popen(['unzip', '-v', script_path], stdout=subprocess.PIPE)
+	output = var.communicate()[0].decode("utf-8")
+	lines_list = output.split("\n")
+	if len(lines_list) > 2 and not lines_list[-1].strip():
+		last_line = lines_list[-2].strip()
+	else:
+	    last_line = lines_list[-1].strip()
+	size_value = int(last_line.split()[0])
+	return size_value
 
 # Unzips installer to target location
 def unpack_installer(script_path, target_path, logger):
