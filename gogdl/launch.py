@@ -50,6 +50,7 @@ def launch(arguments, unknown_args):
     command.extend(unknown_args)
     enviroment = os.environ.copy()
     enviroment.update(envvars)
+    print("Launch command:",command)
     process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
     status = process.wait()
     sys.exit(status)
