@@ -12,5 +12,6 @@ This will take care of downloading games from GOG in Heroic.
 
 
 ## Great resources about GOG API
+- https://github.com/Lariaa/GameLauncherResearch/wiki/
 - https://github.com/Sude-/lgogdownloader
 - https://gogapidocs.readthedocs.io/en/latest/

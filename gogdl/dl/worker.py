@@ -2,11 +2,14 @@ from threading import Thread
 from gogdl.dl import objects, dl_utils
 from gogdl.dl.objects import DepotDirectory
 from copy import copy
+from sys import platform as os_platform
 import hashlib
 import zlib
 import time
 import logging
 import os
+import stat
+
 
 class DLWorker():
     def __init__(self, data, path, api_handler, gameId, submit_downloaded_size, endpoint):
@@ -61,6 +64,11 @@ class DLWorker():
         
         for index in range(len(self.data.chunks)):
             self.decompress_file(item_path+f'.tmp{index}', item_path)
+
+        if ('executable' in self.data.flags) and os_platform != 'win32':
+            file_stats = os.stat(item_path)
+            permissions = file_stats.st_mode | stat.S_IEXEC
+            os.chmod(item_path, permissions)
         self.completed = True
 
 
