@@ -17,25 +17,28 @@ def get_info(args, unknown_args):
     info_file = game_details[0]
     build_id_file = game_details[1]
     platform = game_details[2]
-    f = open(info_file, 'r')
-    info = json.loads(f.read())
-    f.close()
-
-
-    game_id = info['rootGameId']
-    build_id = info.get("buildId")
-    installed_language = ""
-    if 'languages' in info:
-        installed_language = info['languages'][0]
-    elif 'language' in info:
-        installed_language = info['language']
-    else:
-        installed_language = 'en-US'
-    if build_id_file:
-        f = open(build_id_file, 'r')
-        build = json.loads(f.read())
+    build_id = ''
+    installed_language = None
+    info = {}
+    if platform != 'linux':
+        f = open(info_file, 'r')
+        info = json.loads(f.read())
         f.close()
-        build_id = build.get("buildId")
+
+        title = info['name']
+        game_id = info['rootGameId']
+        build_id = info.get("buildId")
+        if 'languages' in info:
+            installed_language = info['languages'][0]
+        elif 'language' in info:
+            installed_language = info['language']
+        else:
+            installed_language = 'en-US'
+        if build_id_file:
+            f = open(build_id_file, 'r')
+            build = json.loads(f.read())
+            f.close()
+            build_id = build.get("buildId")
 
     version_name = build_id
     if build_id and platform != 'linux':
@@ -53,14 +56,18 @@ def get_info(args, unknown_args):
         gameinfo_file = open(os.path.join(path,'gameinfo'),'r')
         data = gameinfo_file.read()
         lines = data.split('\n')
+        game_id = lines[4]
+        title = lines[1]
+        build_id = lines[6]
         version_name = lines[1]
-        language = lines[3]
+        if not installed_language:
+            installed_language = lines[3]
 
     print(json.dumps({
         "appName": game_id,
         "buildId": build_id,
-        "title": info['name'],
-        "tasks": info["playTasks"],
+        "title": title,
+        "tasks": info["playTasks"] if info and info.get('playTasks') else None,
         "installedLanguage": installed_language,
         "platform":platform,
         "versionName":version_name
@@ -78,4 +85,7 @@ def load_game_details(path):
         found = glob.glob(os.path.join(path,'game', 'goggame-*.info'))
         build_id = glob.glob(os.path.join(path, "game", 'goggame-*.id'))
         platform = 'linux'
+    if not found:
+        if os.path.exists(os.path.join(path,'gameinfo')):
+            return (None, None, 'linux')
     return (found[0], build_id[0] if build_id else None, platform)

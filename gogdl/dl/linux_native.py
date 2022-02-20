@@ -77,7 +77,7 @@ def download(id, api_handler, arguments):
 	# Move files to destination
 	command = ['mv', '-f', gamefiles_path, install_path]
 	logger.info("Moving game files")
-	subprocess.Popen(command)
+	subprocess.Popen(command).wait()
 
 	logger.info("Cleaning up")
 	shutil.rmtree(constants.CACHE_DIR)
@@ -89,6 +89,7 @@ def get_installer_unpack_size(script_path):
 	# From sharkwouter's minigalaxy code
 	var = subprocess.Popen(['unzip', '-v', script_path], stdout=subprocess.PIPE)
 	output = var.communicate()[0].decode("utf-8")
+	var.wait()
 	lines_list = output.split("\n")
 	if len(lines_list) > 2 and not lines_list[-1].strip():
 		last_line = lines_list[-2].strip()
