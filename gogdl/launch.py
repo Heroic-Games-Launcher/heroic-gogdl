@@ -24,7 +24,8 @@ def launch(arguments, unknown_args):
             wrapper_arg = arguments.wrapper
             wrapper = shlex.split(wrapper_arg)
         elif arguments.platform != unified_platform[sys.platform]:
-            envvars['WINEPREFIX'] = arguments.wine_prefix
+            if arguments.wine_prefix:
+                envvars['WINEPREFIX'] = arguments.wine_prefix
             wrapper = [arguments.wine]
 
         primary_task = get_primary_task(info)
