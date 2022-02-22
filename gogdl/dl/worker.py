@@ -12,14 +12,14 @@ import stat
 
 
 class DLWorker():
-    def __init__(self, data, path, api_handler, gameId, submit_downloaded_size, endpoint):
+    def __init__(self, data, path, api_handler, gameId, submit_downloaded_size, endpoints):
         self.data = data
         self.path = path
         self.api_handler = api_handler
         self.submit_downloaded_size = submit_downloaded_size
         self.gameId = gameId
         self.completed = False
-        self.endpoint = endpoint
+        self.endpoints = endpoints
         self.logger = logging.getLogger("DOWNLOAD_WORKER")
         self.downloaded_size = 0
         
@@ -53,9 +53,10 @@ class DLWorker():
             if is_dependency:
                 url = dl_utils.get_dependency_link(self.api_handler, dl_utils.galaxy_path(compressed_md5))
             else:
-                parameters = copy(self.endpoint['parameters'])
+                endpoint = self.endpoints[self.data.product_id]
+                parameters = copy(endpoint['parameters'])
                 parameters['path'] += '/' + dl_utils.galaxy_path(compressed_md5)
-                url = dl_utils.merge_url_with_params(self.endpoint['url_format'], parameters)
+                url = dl_utils.merge_url_with_params(endpoint['url_format'], parameters)
             download_path = os.path.join(item_path+f'.tmp{index}')
             dl_utils.prepare_location(
                 dl_utils.parent_dir(download_path), self.logger)
@@ -65,7 +66,7 @@ class DLWorker():
         for index in range(len(self.data.chunks)):
             self.decompress_file(item_path+f'.tmp{index}', item_path)
 
-        if ('executable' in self.data.flags) and os_platform != 'win32':
+        if self.data.flags and ('executable' in self.data.flags) and os_platform != 'win32':
             file_stats = os.stat(item_path)
             permissions = file_stats.st_mode | stat.S_IEXEC
             os.chmod(item_path, permissions)

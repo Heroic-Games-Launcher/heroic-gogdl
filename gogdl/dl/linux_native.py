@@ -5,10 +5,14 @@ from gogdl import constants
 import os
 import xml.etree.ElementTree as ET
 import sys
+import json
 import subprocess
 import logging
 import hashlib
 import shutil
+
+
+logger = logging.getLogger('LINUX')
 
 def get_folder_name_from_windows_manifest(api_handler, id):
 	builds = dl_utils.get_json(
@@ -20,32 +24,63 @@ def get_folder_name_from_windows_manifest(api_handler, id):
 	return install_dir
 
 def download(id, api_handler, arguments):
-	logger = logging.getLogger('LINUX')
 	logger.info("Getting folder name from windows manifest")
 	folder_name = get_folder_name_from_windows_manifest(api_handler, id)
 	install_path = os.path.join(arguments.path, folder_name) if arguments.command == 'download' else str(arguments.path)
 	logger.info("Getting downlad info")
-	game_details = api_handler.get_item_data(id, ['downloads'])
-	installers = game_details['downloads']['installers']
-	linux_installers = []
-	# Filter out linux installers
-	for installer in installers:
-		if installer['os'] == 'linux':
-			linux_installers.append(installer)
+	game_details = api_handler.get_item_data(id, ['downloads', 'expanded_dlcs'])
+
+	owned_dlcs = []
+	dlcs = game_details['dlcs']['products']
+	if arguments.dlcs:
+		for dlc in dlcs:
+			if api_handler.does_user_own(dlc['id']):
+				owned_dlcs.append(dlc)
+		installers = game_details['downloads']['installers']
+
+	if os.path.exists(install_path):
+		shutil.rmtree(install_path)
+	linux_installers = filter_linux_installers(installers)
+	
 	
 	if(len(linux_installers) == 0):
 		logger.error("Nothing do download")
 		sys.exit(1)
 
-	found = None
+	download_installer(arguments,linux_installers, api_handler, install_path)
 
+	for dlc in owned_dlcs:
+		response = api_handler.session.get(dlc['expanded_link'])
+		details = response.json()
+		dlc_installers = details['downloads']['installers']
+		dlc_linux_installers = filter_linux_installers(dlc_installers)
+		download_installer(arguments, dlc_linux_installers, api_handler, install_path,True)
+	logger.info("Cleaning up")
+	shutil.rmtree(constants.CACHE_DIR)
+
+	logger.info("Done")
+	sys.exit(0)
+
+def filter_linux_installers(installers):
+	linux_installers = []
+	# Filter out linux installers
+	for installer in installers:
+		if installer['os'] == 'linux':
+			linux_installers.append(installer)
+	return linux_installers
+
+def download_installer(arguments, linux_installers, api_handler, install_path, is_dlc=False):
+	found = None
 	for installer in linux_installers:
 		if installer['language'] == arguments.lang.split('-')[0]:
 			found = installer
 
 	if not found:
-		logger.error("Couldn't find language you are looking for")
-		sys.exit(1)
+		if len(linux_installers) > 1:
+			logger.error("Couldn't find language you are looking for")
+			sys.exit(1)
+		else:
+			found = linux_installers[0]
 	
 	
 	if not dl_utils.check_free_space(found['total_size'], constants.CACHE_DIR):
@@ -58,7 +93,6 @@ def download(id, api_handler, arguments):
 	checksum = ET.fromstring(checksum.content)
 	success, path = get_file(download['downlink'], constants.CACHE_DIR, api_handler, checksum.attrib['md5'])
 	if(success):
-		print(checksum.attrib['md5'])
 		if dl_utils.calculate_sum(path, hashlib.md5) != checksum.attrib['md5']:
 			logger.warning("Installer integrity invalid, downloading again")
 			success, path = get_file(download['downlink'], constants.CACHE_DIR, api_handler, checksum.attrib['md5'])
@@ -67,24 +101,22 @@ def download(id, api_handler, arguments):
 	
 	if not dl_utils.check_free_space(get_installer_unpack_size(path), unpacked_path):
 		logger.error("Not enough available disk space")
+		sys.exit(1)
 	logger.info("Looks fine continuing")
 	logger.info("Unpacking game files")
 	unpack_installer(path, unpacked_path, logger)
 	
 	gamefiles_path = os.path.join(unpacked_path, 'data', 'noarch')
-	if os.path.exists(install_path):
-		shutil.rmtree(install_path)
 	# Move files to destination
-	command = ['mv', '-f', gamefiles_path, install_path]
+	# shutil.move(gamefiles_path+'/*', install_path)
+	command = f'mv -f "{gamefiles_path}" "{install_path}"'
+	if is_dlc:
+		command = f'cp -r "{gamefiles_path}"/* "{install_path}"'
 	logger.info("Moving game files")
-	subprocess.Popen(command).wait()
+	subprocess.run(command, shell=True)
 
-	logger.info("Cleaning up")
-	shutil.rmtree(constants.CACHE_DIR)
-
-	logger.info("Done")
-	sys.exit(0)
-
+	shutil.rmtree(unpacked_path)
+	
 def get_installer_unpack_size(script_path):
 	# From sharkwouter's minigalaxy code
 	var = subprocess.Popen(['unzip', '-v', script_path], stdout=subprocess.PIPE)
@@ -119,7 +151,7 @@ def get_file(url, path, api_handler, md5):
 	
 	if os.path.exists(path):
 		if dl_utils.calculate_sum(path, hashlib.md5) == md5:
-			logging.info("Using existing file")
+			logger.info("Using existing file")
 			return True, path
 		else:
 			os.remove(path)

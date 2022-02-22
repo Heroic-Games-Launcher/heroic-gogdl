@@ -17,6 +17,7 @@ def get_info(args, unknown_args):
     info_file = game_details[0]
     build_id_file = game_details[1]
     platform = game_details[2]
+    with_dlcs = game_details[3]
     build_id = ''
     installed_language = None
     info = {}
@@ -69,6 +70,7 @@ def get_info(args, unknown_args):
         "title": title,
         "tasks": info["playTasks"] if info and info.get('playTasks') else None,
         "installedLanguage": installed_language,
+        "installedWithDlcs":with_dlcs,
         "platform":platform,
         "versionName":version_name
     }))
@@ -88,4 +90,4 @@ def load_game_details(path):
     if not found:
         if os.path.exists(os.path.join(path,'gameinfo')):
             return (None, None, 'linux')
-    return (found[0], build_id[0] if build_id else None, platform)
+    return (found[0], build_id[0] if build_id else None, platform, len(found) > 1)

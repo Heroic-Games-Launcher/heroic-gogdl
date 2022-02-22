@@ -15,6 +15,7 @@ class ApiHandler():
             "Authorization": f"Bearer {token}",
             'User-Agent': 'GOGGalaxyClient/2.0.45.61 (GOG Galaxy)'
         }
+        self.owned = []
 
     def get_item_data(self, id, expanded=[]):
         url = f'{constants.GOG_API}/products/{id}'
@@ -47,5 +48,10 @@ class ApiHandler():
             return get_zlib_encoded(self, str(json_data['repository_manifest']))[0], json_data.get('version')
 
     def does_user_own(self, id):
-        game_details = self.get_game_details(id)
-        return game_details != []
+        if self.owned == []:
+            response = self.session.get(f'{constants.GOG_EMBED}/user/data/games')
+            self.owned = response.json()['owned']
+        for owned in self.owned:
+            if str(owned) == str(id):
+                return True
+        return False

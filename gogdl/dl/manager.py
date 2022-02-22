@@ -22,6 +22,7 @@ class DownloadManager():
         self.lang = locale.getdefaultlocale()[0].replace('_', '-')
         self.cancelled = False
         self.dlcs_should_be_downloaded = False
+        self.dlc_ids = []
         self.threads = []
         self.platform = "windows" if platform == "win32" else "osx" if platform == "darwin" else "linux"
 
@@ -48,7 +49,7 @@ class DownloadManager():
             if self.depot_version == 2:
                 for product in self.meta['products']:
                     if product["productId"] != self.meta["baseProductId"]:
-                        if self.api_handler.does_user_own("productId"):
+                        if self.api_handler.does_user_own(product["productId"]):
                             dlcs.append({
                                 "title": product['name'],
                                 "app_name": product['productId']
@@ -160,6 +161,7 @@ class DownloadManager():
                     if dlc['productId'] != self.meta['baseProductId']:
                         if self.api_handler.does_user_own(dlc['productId']):
                             owned_dlcs.append(dlc['productId'])
+                            self.dlc_ids.append(dlc['productId'])
 
             for depot in self.meta['depots']:
                 if str(depot['productId']) == str(self.dl_target['id']) or self.dlcs_should_be_downloaded and (depot['productId'] in owned_dlcs):
@@ -185,7 +187,7 @@ class DownloadManager():
             for depot in collected_depots:
                 manifest = dl_utils.get_zlib_encoded(
                     self.api_handler, f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}')[0]
-                download_files += self.get_depot_list(manifest)
+                download_files += self.get_depot_list(manifest, depot.product_id)
             for depot in self.dependencies:
                 manifest = dl_utils.get_zlib_encoded(
                     self.api_handler, f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}')[0]
@@ -246,10 +248,14 @@ class DownloadManager():
         self.progress.start()
 
         self.thpool = ThreadPoolExecutor(max_workers=allowed_threads)
-        endpoint = dl_utils.get_secure_link(self.api_handler, '/', self.dl_target['id'])
+        endpoints = dict()
+
+        endpoints[self.dl_target['id']] = dl_utils.get_secure_link(self.api_handler, '/', self.dl_target['id'])
+        for dlc_id in self.dlc_ids:
+            endpoints[dlc_id] = dl_utils.get_secure_link(self.api_handler, '/', dlc_id)
         # Main game files
         for file in download_files:
-            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size, endpoint)
+            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size, endpoints)
             # thread.do_stuff()
             self.threads.append(self.thpool.submit(thread.do_stuff))
         # Dependencies
@@ -345,12 +351,12 @@ class DownloadManager():
                         dependencies_array.append(dependency)
         return dependencies_array, version
 
-    def get_depot_list(self, manifest):
+    def get_depot_list(self, manifest, product_id=None):
         download_list = list()
         for item in manifest['depot']['items']:
             obj = None
             if item['type'] == 'DepotFile':
-                obj = objects.DepotFile(item)
+                obj = objects.DepotFile(item, product_id)
             else:
                 obj = objects.DepotDirectory(item)
             download_list.append(obj)

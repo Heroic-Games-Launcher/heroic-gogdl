@@ -17,7 +17,8 @@ class ProgressBar(threading.Thread):
         self.last_update = time()
         self.total_readable_size = total_readable_size
         self.completed = False
-        
+        self.speed_snapshots = list()
+
         super().__init__(target=self.print_progressbar)
 
     def print_progressbar(self):
@@ -36,8 +37,16 @@ class ProgressBar(threading.Thread):
             time_since_last_update = time() - self.last_update
             size_left = self.total - self.downloaded
 
-            download_speed = self.downloaded_since_update / 1
-            estimated_time = size_left / download_speed
+            download_speed = self.downloaded_since_update / time_since_last_update
+            self.speed_snapshots.append(download_speed)
+            if len(self.speed_snapshots) > 5:
+                self.speed_snapshots.pop(0)
+            average_speed = 0
+            for snapshot in self.speed_snapshots:
+                average_speed += snapshot
+            average_speed = average_speed / len(self.speed_snapshots)
+
+            estimated_time = size_left / average_speed
 
             estimated_h = int(estimated_time // 3600)
             estimated_time = estimated_time % 3600
@@ -45,8 +54,9 @@ class ProgressBar(threading.Thread):
             estimated_s = int(running_time % 60)
 
             self.logger.info(f'= Progress: {percentage:.02f} {self.downloaded}/{self.total}, '+
-                            #  f'Runtime: {runtime_h:02d}:{runtime_m:02d}:{runtime_s:02d}, '+
-                             f'Runtime: 00, '+
+                            # TODO: Figure out why this line below is throwing an error
+                            #  f'Running for: {runtime_h:02d}:{runtime_m:02d}:{runtime_s:02d}, '+
+                             f'Running for: 00:00:00, '+
                              f'ETA: {estimated_h:02d}:{estimated_m:02d}:{estimated_s:02d}')
             self.logger.info(f'= Downloaded: {self.downloaded / 1024 / 1024:.02f} MiB')
             self.downloaded_since_update = 1

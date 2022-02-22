@@ -1,10 +1,11 @@
 class DepotFile():
-    def __init__(self, item_data):
+    def __init__(self, item_data, product_id):
         self.path = item_data['path'].replace('\\', '/')
         self.chunks = item_data['chunks']
         self.flags = item_data.get('flags')
         self.md5 = item_data.get('md5')
         self.sha256 = item_data.get('sha256')
+        self.product_id = product_id
 
 
 # That exists in some depots, indicates directory to be created, it has only path in it
