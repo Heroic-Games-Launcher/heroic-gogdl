@@ -4,6 +4,8 @@ import os
 import gogdl.constants as constants
 import hashlib
 import shutil
+from sys import platform
+PATH_SEPARATOR = '\\' if platform == 'win32' else '/'
 
 def get_json(api_handler, url):
     x = api_handler.session.get(url)
@@ -75,7 +77,7 @@ def merge_url_with_params(url, parameters):
     return url
 
 def parent_dir(path: str):
-    return path[0:path.rindex('/')]
+    return path[0:path.rindex(PATH_SEPARATOR)]
 
 
 def classify_cdns(array, generation=2):
