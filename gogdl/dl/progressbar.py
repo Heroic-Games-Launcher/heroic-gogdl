@@ -37,7 +37,7 @@ class ProgressBar(threading.Thread):
             time_since_last_update = time() - self.last_update
             size_left = self.total - self.downloaded
 
-            download_speed = self.downloaded_since_update / time_since_last_update
+            download_speed = self.downloaded_since_update / max(time_since_last_update,0.1)
             self.speed_snapshots.append(download_speed)
             if len(self.speed_snapshots) > 5:
                 self.speed_snapshots.pop(0)
