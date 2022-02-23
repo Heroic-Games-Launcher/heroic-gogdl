@@ -29,11 +29,11 @@ class DownloadManager():
     def download(self, args, unknown_args):
         if self.get_download_metadata(args):
             if self.perform_download():
-                exit(0)
+                sys.exit(0)
             else:
-                exit(2)
+                sys.exit(2)
         else:
-            exit(1)
+            sys.exit(1)
 
     def calculate_download_size(self, args, unknown_args):
         if self.get_download_metadata(args):

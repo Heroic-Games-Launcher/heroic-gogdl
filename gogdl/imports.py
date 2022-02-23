@@ -11,7 +11,7 @@ def get_info(args, unknown_args):
     path = args.path
     if not os.path.exists(path):
         logger.error("Provided path is invalid!")
-        exit(1)
+        sys.exit(1)
     game_details = load_game_details(path)
 
     info_file = game_details[0]

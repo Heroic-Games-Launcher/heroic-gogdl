@@ -36,7 +36,7 @@ def download(id, api_handler, arguments):
 		for dlc in dlcs:
 			if api_handler.does_user_own(dlc['id']):
 				owned_dlcs.append(dlc)
-		installers = game_details['downloads']['installers']
+	installers = game_details['downloads']['installers']
 
 	if os.path.exists(install_path):
 		shutil.rmtree(install_path)
