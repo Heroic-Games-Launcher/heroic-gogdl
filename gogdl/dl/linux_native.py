@@ -31,11 +31,12 @@ def download(id, api_handler, arguments):
 	game_details = api_handler.get_item_data(id, ['downloads', 'expanded_dlcs'])
 
 	owned_dlcs = []
-	dlcs = game_details['dlcs']['products']
-	if arguments.dlcs:
-		for dlc in dlcs:
-			if api_handler.does_user_own(dlc['id']):
-				owned_dlcs.append(dlc)
+	if len(game_details['dlcs']) > 0:
+		dlcs = game_details['dlcs']['products']
+		if arguments.dlcs:
+			for dlc in dlcs:
+				if api_handler.does_user_own(dlc['id']):
+					owned_dlcs.append(dlc)
 	installers = game_details['downloads']['installers']
 
 	if os.path.exists(install_path):
