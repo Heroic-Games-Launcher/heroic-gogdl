@@ -89,5 +89,5 @@ def load_game_details(path):
         platform = 'linux'
     if not found:
         if os.path.exists(os.path.join(path,'gameinfo')):
-            return (None, None, 'linux')
+            return (None, None, 'linux', False)
     return (found[0], build_id[0] if build_id else None, platform, len(found) > 1)
