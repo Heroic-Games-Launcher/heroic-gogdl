@@ -4,7 +4,7 @@ import os
 import gogdl.constants as constants
 import hashlib
 import shutil
-from sys import platform
+from sys import platform, exit
 PATH_SEPARATOR = '\\' if platform == 'win32' else '/'
 
 def get_json(api_handler, url):
@@ -48,6 +48,7 @@ def get_secure_link(api_handler, path, gameId, generation=2):
     r = api_handler.session.get(url)
     if not r.ok:
             print(f'ERROR getting secure link for {path}')
+            exit(1)
     js = r.json()
 
     endpoint = classify_cdns(js['urls'], generation)

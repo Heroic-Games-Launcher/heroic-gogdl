@@ -305,11 +305,14 @@ class DownloadManager():
             worker = DLWorkerV1(download_file, self.dl_path, link, self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size)
             thread = self.thpool.submit(worker.do_stuff, False)
             self.threads.append(thread)
+            # worker.do_stuff(False)
         
         for download_file in dependency_files:
             worker = DLWorkerV1(download_file, self.dl_path, download_file['link'], self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size)
             thread = self.thpool.submit(worker.do_stuff, True)
             self.threads.append(thread)
+            
+            # worker.do_stuff(True)
 
         while True:
             is_done = False
@@ -379,7 +382,8 @@ class DownloadManager():
                     download_size+=int(chunk['compressedSize'])
                     disk_size+=int(chunk['size'])
             elif self.depot_version == 1:
-                disk_size+=int(file['size'])
+                if file.get('size'):
+                    disk_size+=int(file['size'])
         for dependency in dependencies:
             if self.depot_version == 2:
                 for chunk in dependency.chunks:
