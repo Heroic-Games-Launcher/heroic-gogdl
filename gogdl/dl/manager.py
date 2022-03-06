@@ -19,7 +19,7 @@ class DownloadManager():
         self.api_handler = api_handler
         self.logger = logging.getLogger('DOWNLOAD_MANAGER')
         self.logger.setLevel(logging.INFO)
-        self.lang = locale.getdefaultlocale()[0].replace('_', '-')
+        self.lang = 'en' # This is the default now (won't be used in heroic), removed automatic detection since introduces crashes on MacOS. 
         self.cancelled = False
         self.dlcs_should_be_downloaded = False
         self.dlc_ids = []
@@ -83,7 +83,7 @@ class DownloadManager():
             self.allowed_threads = int(args.workers_count)
         else:
             self.allowed_threads = cpu_count()
-        # Getting more and newer data
+        # Getting more data
         self.dl_target = self.api_handler.get_item_data(args.id)
         self.dl_target['id'] = args.id
 
@@ -342,14 +342,19 @@ class DownloadManager():
                     old_iterator.append(depot)
         
         iterator = self.meta['dependencies'] if self.depot_version == 2 else old_iterator
-        for dependency in dependencies_json['depots'] if self.depot_version == 2 else dependencies_json['product']['depots']:
+        dependencies_depots = dependencies_json['depots'] if self.depot_version == 2 else dependencies_json['product']['depots']
+        for dependency in dependencies_depots:
             for game_dep in iterator:
                 if self.depot_version == 2:
                     if dependency['dependencyId'] == game_dep:
                         dependencies_array.append(dependency)
                 else:
                     if game_dep['redist'] in dependency['gameIDs']:
-                        dependency['path'] = game_dep['targetDir']
+                        #TODO: investigate issue https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/issues/1018
+                        if game_dep.get('targetDir'):
+                            dependency['path'] = game_dep['targetDir']
+                        else:
+                            dependency['path'] = os.path.join("__redist",game_dep['redist'])
                         dependency['redist'] = game_dep['redist']
                         dependencies_array.append(dependency)
         return dependencies_array, version

@@ -43,11 +43,17 @@ def launch(arguments, unknown_args):
 
         if len(wrapper) > 0 and wrapper[0] is not None:
             command.extend(wrapper)
+        working_dir = os.path.join(arguments.path, primary_task['workingDir'] if primary_task.get('workingDir') else '')
+        if arguments.override_exe:
+            command.append(arguments.override_exe)
+            working_dir = os.path.split(arguments.override_exe)[0]
         command.append(executable)
         command.extend(launch_arguments)
-        working_dir = os.path.join(arguments.path, primary_task['workingDir'] if primary_task.get('workingDir') else '')
     else:
         command.append(info)
+        if arguments.override_exe:
+            command.append(arguments.override_exe)
+            working_dir = os.path.split(arguments.override_exe)[0]
     command.extend(unknown_args)
     enviroment = os.environ.copy()
     enviroment.update(envvars)

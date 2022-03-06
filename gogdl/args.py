@@ -4,7 +4,11 @@ import sys
 
 def init_parser():
     parser = argparse.ArgumentParser(description='GOG downloader for Heroic Games Launcher')
-    subparsers = parser.add_subparsers(dest='command', required=True)
+    
+    parser.add_argument('--version','-v', dest="display_version", action="store_true", help='Display GOGDL version')
+
+    subparsers = parser.add_subparsers(dest='command')
+    
     download_parser = subparsers.add_parser('download', aliases=['repair', 'update'], help='Download/update/repair game')
     download_parser.add_argument('id', help='Game id')
     download_parser.add_argument('--lang', '-l', help='Specify game language')
@@ -37,6 +41,6 @@ def init_parser():
     launch_parser.add_argument('--wine', dest='wine', help='Specify wine bin path')
     launch_parser.add_argument('--wine-prefix', dest='wine_prefix')
     launch_parser.add_argument('--wrapper', dest='wrapper')
+    launch_parser.add_argument('--override-exe', dest='override_exe', help='Override executable to be run')
     launch_parser.add_argument('--token', '-t', dest='token', help='Provide access_token', required=False)
-    # TODO Create parser
     return parser.parse_known_args()

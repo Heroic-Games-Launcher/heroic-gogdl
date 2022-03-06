@@ -12,12 +12,14 @@ class ApiHandler():
         adapter = requests.adapters.HTTPAdapter(pool_maxsize=cpu_count())
         self.session.mount("https://", adapter)
         self.session.headers = {
-            "Authorization": f"Bearer {token}",
             'User-Agent': 'GOGGalaxyClient/2.0.45.61 (GOG Galaxy)'
         }
+        if token:
+            self.session.headers["Authorization"] = f"Bearer {token}"
         self.owned = []
 
     def get_item_data(self, id, expanded=[]):
+        self.logger.info(f"Getting info from products endpoint for id: {id}")
         url = f'{constants.GOG_API}/products/{id}'
         expanded_arg = '?expand='
         if(len(expanded) > 0):

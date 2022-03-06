@@ -91,12 +91,15 @@ def download_installer(arguments, linux_installers, api_handler, install_path, i
 	url = found['files'][0]['downlink']
 	download = dl_utils.get_json(api_handler, url)
 	checksum = api_handler.session.get(download['checksum'])
-	checksum = ET.fromstring(checksum.content)
-	success, path = get_file(download['downlink'], constants.CACHE_DIR, api_handler, checksum.attrib['md5'])
+	md5 = ""
+	if checksum.ok and checksum.content:
+		checksum = ET.fromstring(checksum.content)
+		md5 = checksum.attrib['md5']
+	success, path = get_file(download['downlink'], constants.CACHE_DIR, api_handler, md5)
 	if(success):
-		if dl_utils.calculate_sum(path, hashlib.md5) != checksum.attrib['md5']:
+		if md5 and dl_utils.calculate_sum(path, hashlib.md5) != md5:
 			logger.warning("Installer integrity invalid, downloading again")
-			success, path = get_file(download['downlink'], constants.CACHE_DIR, api_handler, checksum.attrib['md5'])
+			success, path = get_file(download['downlink'], constants.CACHE_DIR, api_handler, md5)
 	unpacked_path = os.path.join(constants.CACHE_DIR, 'unpacked')
 	logger.info('Checking available disk space')
 	
