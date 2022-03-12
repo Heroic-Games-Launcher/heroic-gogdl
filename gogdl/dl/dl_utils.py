@@ -5,7 +5,7 @@ import gogdl.constants as constants
 import hashlib
 import shutil
 from sys import platform, exit
-PATH_SEPARATOR = '\\' if platform == 'win32' else '/'
+PATH_SEPARATOR = os.sep
 
 def get_json(api_handler, url):
     x = api_handler.session.get(url)

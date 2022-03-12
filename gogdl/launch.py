@@ -43,7 +43,10 @@ def launch(arguments, unknown_args):
 
         if len(wrapper) > 0 and wrapper[0] is not None:
             command.extend(wrapper)
-        working_dir = os.path.join(arguments.path, primary_task['workingDir'] if primary_task.get('workingDir') else '')
+        relative_working_dir =  primary_task['workingDir'] if primary_task.get('workingDir') else ''
+        if sys.platform != 'win32':
+            relative_working_dir = relative_working_dir.replace("\\", os.sep)
+        working_dir = os.path.join(arguments.path, relative_working_dir)
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
@@ -58,6 +61,10 @@ def launch(arguments, unknown_args):
     enviroment = os.environ.copy()
     enviroment.update(envvars)
     print("Launch command:",command)
+    # Handle case sensitive file systems
+    if not os.path.exists(working_dir):
+        working_dir = get_case_insensitive_name(arguments.path, working_dir)
+    
     process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
     status = process.wait()
     sys.exit(status)
@@ -79,3 +86,15 @@ def load_game_info(path, id, platform):
         data = f.read()
         f.close()
         return json.loads(data)
+
+
+def get_case_insensitive_name(root, path):
+    if not root[len(root)-1] in ["/","\\"]:
+        root = root + "/"
+    s_working_dir = path.replace(root, '').split(os.sep)
+    for directory in s_working_dir:
+        dir_list = os.listdir(root)
+        for existing_dir in dir_list:
+            if existing_dir.lower() == directory.lower():
+                root = os.path.join(root, existing_dir)
+    return root
