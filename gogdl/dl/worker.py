@@ -27,6 +27,8 @@ class DLWorker():
         self.is_dependency = is_dependency
         if(os_platform == 'win32'):
             self.data.path = self.data.path.replace('/', '\\')
+        else:
+            self.data.path = self.data.path.replace('\\',os.sep)
         item_path = os.path.join(self.path, self.data.path)
         if type(self.data) == DepotDirectory:
             dl_utils.prepare_location(item_path)
@@ -161,7 +163,10 @@ class DLWorkerV1():
             self.data['path'] = self.data['path'][1:]
         item_path = os.path.join(self.path, self.data['path'])
         if(os_platform == 'win32'):
-            item_path = item_path.replace('/','\\')
+            item_path = item_path.replace('/',os.sep)
+        else:
+            item_path = item_path.replace('\\',os.sep)
+            
         if self.data.get('support') == True:
             item_path = os.path.join(self.path, 'support', self.data['path'])
         if self.verify_file(item_path):
