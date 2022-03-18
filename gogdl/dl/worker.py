@@ -38,6 +38,13 @@ class DLWorker():
         if type(self.data) == DepotDirectory:
             dl_utils.prepare_location(item_path)
             return
+        # Fix for https://github.com/Heroic-Games-Launcher/heroic-gogdl/issues/3
+        if len(self.data.chunks) == 0:
+            directory, file_name = os.path.split(item_path)
+            dl_utils.prepare_location(directory)
+            open(item_path, 'w').close()
+            return
+
         if self.verify_file(item_path):
             size = 0
             for chunk in self.data.chunks:

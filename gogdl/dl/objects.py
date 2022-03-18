@@ -21,7 +21,7 @@ class Depot():
         self.languages = depot_data['languages']
         self.bitness = depot_data.get('osBitness')
         self.product_id = depot_data['productId']
-        self.compressed_size = depot_data['compressedSize']
+        self.compressed_size = depot_data.get('compressedSize')
         self.size = depot_data['size']
         self.manifest = depot_data['manifest']
 
