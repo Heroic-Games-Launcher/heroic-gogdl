@@ -53,10 +53,12 @@ def launch(arguments, unknown_args):
         command.append(executable)
         command.extend(launch_arguments)
     else:
-        command.append(info)
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
+        else:
+            command.append(info)
+
     command.extend(unknown_args)
     enviroment = os.environ.copy()
     enviroment.update(envvars)
