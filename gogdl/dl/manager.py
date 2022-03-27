@@ -10,7 +10,7 @@ from multiprocessing import cpu_count
 from gogdl.dl import dl_utils, objects, linux_native
 from gogdl.dl.worker import *
 from gogdl.dl.progressbar import ProgressBar
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import gogdl.constants as constants
 from sys import exit
 
@@ -264,15 +264,10 @@ class DownloadManager():
             self.threads.append(self.thpool.submit(thread.do_stuff, (True)))
 
         # Wait until everything finishes
-        while True:
-            is_done = False
-            for thread in self.threads:
-                is_done = thread.done()
-                if is_done == False:
-                    break
-            if is_done:
+        for thread in as_completed(self.threads):
+            if thread.cancelled():
+                self.cancelled = True
                 break
-            sleep(0.1)
 
         #TODO: Get game icon, for shortcuts
         self.progress.completed = True
@@ -314,15 +309,10 @@ class DownloadManager():
             
             # worker.do_stuff(True)
 
-        while True:
-            is_done = False
-            for thread in self.threads:
-                is_done = thread.done()
-                if is_done == False:
-                    break
-            if is_done:
+        for thread in as_completed(self.threads):
+            if thread.cancelled():
+                self.cancelled = True
                 break
-            sleep(0.1)
 
         self.progress.completed = True
 
