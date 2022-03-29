@@ -41,16 +41,21 @@ def launch(arguments, unknown_args):
         if compatibility_flags is None:
             compatibility_flags = []
 
-        if len(wrapper) > 0 and wrapper[0] is not None:
-            command.extend(wrapper)
         relative_working_dir =  primary_task['workingDir'] if primary_task.get('workingDir') else ''
         if sys.platform != 'win32':
             relative_working_dir = relative_working_dir.replace("\\", os.sep)
+            executable = executable.replace("\\", os.sep)
         working_dir = os.path.join(arguments.path, relative_working_dir)
+        
+        if not os.path.exists(executable):
+            executable = get_case_insensitive_name(arguments.path, executable)
+        if len(wrapper) > 0 and wrapper[0] is not None:
+            command.extend(wrapper)
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
-        command.append(executable)
+        else:
+            command.append(executable)
         command.extend(launch_arguments)
     else:
         if arguments.override_exe:
