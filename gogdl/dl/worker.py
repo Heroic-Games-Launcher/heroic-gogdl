@@ -12,11 +12,11 @@ import stat
 
 
 class DLWorker():
-    def __init__(self, data, path, api_handler, gameId, submit_downloaded_size, endpoints):
+    def __init__(self, data, path, api_handler, gameId, progress, endpoints):
         self.data = data
         self.path = path
         self.api_handler = api_handler
-        self.submit_downloaded_size = submit_downloaded_size
+        self.progress = progress
         self.gameId = gameId
         self.completed = False
         self.endpoints = endpoints
@@ -49,7 +49,7 @@ class DLWorker():
             size = 0
             for chunk in self.data.chunks:
                 size += chunk['compressedSize']
-            self.submit_downloaded_size(size)
+            self.progress.update_downloaded_size(size)
             self.completed = True
             return
 
@@ -72,7 +72,7 @@ class DLWorker():
             dl_utils.prepare_location(
                 dl_utils.parent_dir(download_path), self.logger)
             self.get_file(url, download_path, compressed_md5, md5, index)
-            self.submit_downloaded_size(self.downloaded_size)
+            self.progress.update_downloaded_size(self.downloaded_size)
         
         for index in range(len(self.data.chunks)):
             self.decompress_file(item_path+f'.tmp{index}', item_path)
@@ -119,6 +119,7 @@ class DLWorker():
             else:
                 total = int(total)
                 for data in response.iter_content(chunk_size=max(int(total/1000), 1024*1024)):
+                    self.progress.update_download_speed(len(data))
                     f.write(data)
             f.close()
             isExisting = os.path.exists(path)
@@ -154,11 +155,11 @@ class DLWorker():
             return False
 
 class DLWorkerV1():
-    def __init__(self, data, path, download_link, api_handler, gameId, submit_downloaded_size):
+    def __init__(self, data, path, download_link, api_handler, gameId, progressbar):
         self.data = data
         self.path = path
         self.api_handler = api_handler
-        self.submit_downloaded_size = submit_downloaded_size
+        self.progress = progressbar
         self.gameId = gameId
         self.completed = False
         self.logger = logging.getLogger("DOWNLOAD_WORKER_V1")
@@ -179,7 +180,7 @@ class DLWorkerV1():
         if self.verify_file(item_path):
             self.completed = True 
             if not is_dependency:
-                self.submit_downloaded_size(int(self.data['size']))
+                self.progress.update_downloaded_size(int(self.data['size']))
             return
         else:
             if os.path.exists(item_path):
@@ -188,7 +189,7 @@ class DLWorkerV1():
                 dl_utils.parent_dir(item_path), self.logger)
         self.get_file(item_path)
         if not is_dependency:
-            self.submit_downloaded_size(int(self.data['size']))
+            self.progress.update_downloaded_size(int(self.data['size']))
 
     def get_file(self, item_path):
         headers = {
@@ -202,6 +203,7 @@ class DLWorkerV1():
             else:
                 total = int(total)
                 for data in response.iter_content(chunk_size=max(int(total/1000), 1024*1024)):
+                    self.progress.update_download_speed(len(data))
                     f.write(data)
             f.close()
             if os.path.exists(item_path):

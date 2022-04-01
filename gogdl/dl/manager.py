@@ -29,6 +29,7 @@ class DownloadManager():
     def download(self, args, unknown_args):
         if self.get_download_metadata(args):
             if self.perform_download():
+                self.logger.info("Done")
                 exit(0)
             else:
                 exit(2)
@@ -258,12 +259,12 @@ class DownloadManager():
             endpoints[dlc_id] = dl_utils.get_secure_link(self.api_handler, '/', dlc_id)
         # Main game files
         for file in download_files:
-            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size, endpoints)
+            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress, endpoints)
             # thread.do_stuff()
             self.threads.append(self.thpool.submit(thread.do_stuff))
         # Dependencies
         for file in dependency_files:
-            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size, None)
+            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress, None)
             self.threads.append(self.thpool.submit(thread.do_stuff, (True)))
 
         # Wait until everything finishes
@@ -300,13 +301,13 @@ class DownloadManager():
         self.progress.start()
         self.threads = []
         for download_file in download_files:
-            worker = DLWorkerV1(download_file, self.dl_path, link, self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size)
+            worker = DLWorkerV1(download_file, self.dl_path, link, self.api_handler, self.dl_target['id'], self.progress)
             thread = self.thpool.submit(worker.do_stuff, False)
             self.threads.append(thread)
             # worker.do_stuff(False)
         
         for download_file in dependency_files:
-            worker = DLWorkerV1(download_file, self.dl_path, download_file['link'], self.api_handler, self.dl_target['id'], self.progress.update_downloaded_size)
+            worker = DLWorkerV1(download_file, self.dl_path, download_file['link'], self.api_handler, self.dl_target['id'], self.progress)
             thread = self.thpool.submit(worker.do_stuff, True)
             self.threads.append(thread)
             

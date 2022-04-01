@@ -63,4 +63,6 @@ class ProgressBar(threading.Thread):
             sleep(1)
     def update_downloaded_size(self, addition):
         self.downloaded+=addition
+
+    def update_download_speed(self, addition):
         self.downloaded_since_update+=addition

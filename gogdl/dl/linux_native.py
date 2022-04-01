@@ -77,9 +77,9 @@ def download_installer(arguments, linux_installers, api_handler, install_path, i
 			found = installer
 
 	if not found:
-		if len(linux_installers) > 1:
-			logger.error("Couldn't find language you are looking for")
-			sys.exit(1)
+		if len(linux_installers) == 0:
+			logger.warning("Couldn't find installer to download")
+			return
 		else:
 			found = linux_installers[0]
 	
@@ -169,6 +169,7 @@ def get_file(url, path, api_handler, md5):
 			total = int(total)
 			for data in response.iter_content(chunk_size=max(int(total/1000), 1024*1024)):
 				f.write(data)
+				progress_bar.update_download_speed(len(data))
 				progress_bar.update_downloaded_size(len(data))
 	f.close()
 	progress_bar.completed = True
