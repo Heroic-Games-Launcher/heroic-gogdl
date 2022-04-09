@@ -18,13 +18,14 @@ def launch(arguments, unknown_args):
     working_dir = arguments.path
     # If type is a string we know it's a path to start.sh on linux
     if type(info) != str:
-        if arguments.dont_use_wine == True or sys.platform == "win32":
-            wrapper_arg = arguments.wrapper
-            wrapper = shlex.split(wrapper_arg)
-        elif arguments.platform != unified_platform[sys.platform]:
-            if arguments.wine_prefix:
-                envvars["WINEPREFIX"] = arguments.wine_prefix
-            wrapper = [arguments.wine]
+        if sys.platform != "win32":
+            if arguments.dont_use_wine == True:
+                wrapper_arg = arguments.wrapper
+                wrapper = shlex.split(wrapper_arg)
+            elif arguments.platform != unified_platform[sys.platform]:
+                if arguments.wine_prefix:
+                    envvars["WINEPREFIX"] = arguments.wine_prefix
+                wrapper = [arguments.wine]
 
         primary_task = get_primary_task(info)
         launch_arguments = primary_task.get("arguments")
@@ -52,7 +53,7 @@ def launch(arguments, unknown_args):
 
         if len(wrapper) > 0 and wrapper[0] is not None:
             command.extend(wrapper)
-            
+
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
