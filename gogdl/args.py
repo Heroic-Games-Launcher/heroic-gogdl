@@ -43,4 +43,15 @@ def init_parser():
     launch_parser.add_argument('--wrapper', dest='wrapper')
     launch_parser.add_argument('--override-exe', dest='override_exe', help='Override executable to be run')
     launch_parser.add_argument('--token', '-t', dest='token', help='Provide access_token', required=False)
+
+
+    save_parser = subparsers.add_parser('save-sync', help="Sync game saves")
+    save_parser.add_argument('path', help="Path to sync files")
+    save_parser.add_argument('id', help="Game id")
+    # save_parser.add_argument('client_id', help="Client ID of a game")
+    # save_parser.add_argument('client_secret', help="Client secret of a game")
+    save_parser.add_argument('--token', '-t', dest='token', help='Provide refresh_token to generate game specific auth keys', required=False)
+    save_parser.add_argument('--platform', '--os',dest='platform', help='Target opearting system', choices=['windows', 'osx'], required=True)
+
+
     return parser.parse_known_args()
