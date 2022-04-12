@@ -28,7 +28,9 @@ class ApiHandler():
         response = self.session.get(url)
         self.logger.debug(url)
         if response.ok:
-            return response.json()    
+            return response.json()
+        else:
+            self.logger.error(f"Request failed {response}")
 
     def get_game_details(self, id):
         url = f'{constants.GOG_EMBED}/account/gameDetails/{id}.json'
