@@ -5,7 +5,6 @@ import gogdl.api as api
 import gogdl.imports as imports
 import gogdl.launch as launch
 from gogdl import version as gogdl_version
-from gogdl import utils
 import logging
 
 logging.basicConfig(format="[%(name)s] %(levelname)s: %(message)s", level=logging.INFO)
@@ -24,7 +23,7 @@ def main():
     if not arguments.command:
         print("No command provided!")
         return
-    api_handler = api.ApiHandler(utils.strip_quotes(arguments.token))
+    api_handler = api.ApiHandler(arguments.token.strip('"') if arguments.token else None)
     download_manager = manager.DownloadManager(api_handler)
 
     switcher = {
