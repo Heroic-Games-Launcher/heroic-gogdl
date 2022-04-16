@@ -4,16 +4,20 @@ import requests
 import hashlib
 import datetime
 import gzip
+import time
 from enum import Enum
 
 import gogdl.dl.dl_utils as dl_utils
 import gogdl.constants as constants
+
+LOCAL_TIMEZONE = datetime.datetime.utcnow().astimezone().tzinfo
 
 
 class SyncAction(Enum):
     DOWNLOAD = 0
     UPLOAD = 1
     CONFLICT = 2
+    NONE = 3
 
 
 class SyncFile:
@@ -22,18 +26,23 @@ class SyncFile:
         self.absolute_path = abs_path
         self.md5 = md5
         self.update_time = update_time
+        self.update_ts = (
+            datetime.datetime.fromisoformat(update_time).astimezone().timestamp()
+            if update_time
+            else None
+        )
 
-    @staticmethod
-    def get_file_metadata(path: str):
-
-        ts = os.stat(path).st_mtime
-        print(ts)
-        date_time_obj = datetime.datetime.fromtimestamp(ts)
-        md5_sum = hashlib.md5(
-            gzip.compress(open(path, "rb").read(), 6, mtime=0)
+    def get_file_metadata(self):
+        ts = os.stat(self.absolute_path).st_mtime
+        date_time_obj = datetime.datetime.fromtimestamp(
+            ts, tz=LOCAL_TIMEZONE
+        ).astimezone(datetime.timezone.utc)
+        self.md5 = hashlib.md5(
+            gzip.compress(open(self.absolute_path, "rb").read(), 6, mtime=0)
         ).hexdigest()
 
-        return md5_sum, date_time_obj.isoformat(timespec="microseconds")
+        self.update_time = date_time_obj.isoformat(timespec="seconds")
+        self.update_ts = date_time_obj.timestamp()
 
     def __repr__(self):
         return f"{self.md5} {self.relative_path}"
@@ -92,7 +101,7 @@ class CloudStorageManager:
         ]
 
         for f in local_files:
-            f.md5, f.update_time = SyncFile.get_file_metadata(f.absolute_path)
+            f.get_file_metadata()
 
         self.logger.info(f"Local files: {len(dir_list)}")
         self.client_id, self.client_secret = self.get_auth_ids()
@@ -100,36 +109,40 @@ class CloudStorageManager:
 
         cloud_files = self.get_cloud_files_list()
 
-        # comparison = FilesComparison.compare(local_files, cloud_files)
-
-        # self.logger.info(f"Files to download {len(comparison.download)}")
-        # self.logger.info(f"Files to upload {len(comparison.upload)}")
-
-        # # print(local_files, cloud_files)
-        # return
-        # if len(comparison.download) == 0 and len(comparison.upload) == 0:
-        #     self.logger.info("Nothing to do")
-        #     return
-        newest_file = cloud_files[0]
-        for f in cloud_files:
-            if newest_file.update_time > f.update_time:
-                newest_file = f
-
-        action = None
         if len(local_files) > 0 and len(cloud_files) == 0:
             action = SyncAction.UPLOAD
+            self.logger.info("No files in cloud, uploading")
+            for f in local_files:
+                self.upload_file(f)
+            return
         elif len(local_files) == 0 and len(cloud_files) > 0:
+            self.logger.info("No files locally, downloading")
             action = SyncAction.DOWNLOAD
-        print(newest_file)
+            for f in cloud_files:
+                self.download_file(f)
+            return
+
+        timestamp = float(arguments.timestamp)
+        classifier = SyncClassifier.classify(local_files, cloud_files, timestamp)
+
+        action = classifier.get_action()
         print(action)
-        # for f in cloud_files:
-            # self.download_file(f)
-        return
+        # return
+        if action == SyncAction.UPLOAD:
+            for f in classifier.updated_local:
+                self.upload_file(f)
+        elif action == SyncAction.DOWNLOAD:
+            for f in classifier.updated_cloud:
+                self.download_file(f)
+        elif action == SyncAction.CONFLICT:
+            self.logger.error(
+                "Files in conflict force downloading or uploading of files"
+            )
+        elif action == SyncAction.NONE:
+            self.logger.info("Nothing to do")
 
-
+        print(datetime.datetime.now().timestamp())
         self.logger.info("Done")
-
-    def store_success_info(self):
 
     def get_auth_token(self):
         url = self._get_token_gen_url(self.client_id, self.client_secret)
@@ -149,7 +162,7 @@ class CloudStorageManager:
             return []
 
         json_res = response.json()
-        print(json_res)
+        # print(json_res)
         self.logger.info(f"Files in cloud: {len(json_res)}")
 
         files = [
@@ -157,7 +170,7 @@ class CloudStorageManager:
                 sync_f["name"].replace("saves/", "", 1),
                 os.path.join(self.sync_path, sync_f["name"].replace("saves/", "", 1)),
                 md5=sync_f["hash"],
-                update_time=sync_f["last_modified"].split("+")[0],
+                update_time=sync_f["last_modified"],
             )
             for sync_f in json_res
         ]
@@ -187,7 +200,7 @@ class CloudStorageManager:
             open(file.absolute_path, "rb").read(), 6, mtime=0
         )
         headers = {
-            "X-Object-Meta-LocalLastModified": f"{file.update_time}+00:00",
+            "X-Object-Meta-LocalLastModified": f"{file.update_time}",
             "Etag": hashlib.md5(compressed_data).hexdigest(),
             "Content-Encoding": "gzip",
         }
@@ -225,58 +238,52 @@ class CloudStorageManager:
             ):
                 f.write(data)
 
-        f_timestamp = datetime.datetime.fromisoformat(
-            response.headers.get("X-Object-Meta-LocalLastModified")
-        ).timestamp()
-
+        f_timestamp = (
+            datetime.datetime.fromisoformat(
+                response.headers.get("X-Object-Meta-LocalLastModified")
+            )
+            .astimezone()
+            .timestamp()
+        )
         os.utime(file.absolute_path, (f_timestamp, f_timestamp))
 
     def _get_token_gen_url(self, client_id: str, client_secret: str) -> str:
         return f"https://auth.gog.com/token?client_id={client_id}&client_secret={client_secret}&grant_type=refresh_token&refresh_token={self.arguments.token}&without_new_session=1"
 
 
-class FilesComparison:
-    def __init__(self):
-        self.download = []
-        self.upload = []
-
-    @classmethod
-    def compare(cls, local, cloud):
-        comparison = cls()
-
-        if len(cloud) > 0:
-            local_files = dict()
-            for f in local:
-                local_files[f.relative_path] = f
-
-            for f in cloud:
-                if f.relative_path not in local_files:
-                    comparison.download.append(f)
-                    continue
-
-                c_timestamp = datetime.datetime.fromisoformat(f.update_time).timestamp()
-                l_timestamp = datetime.datetime.fromisoformat(
-                    local_files[f.relative_path].update_time
-                ).timestamp()
-                if c_timestamp > l_timestamp:
-                    comparison.download.append(f)
-                elif c_timestamp < l_timestamp:
-                    comparison.upload.append(local_files[f.relative_path])
-
-                del local_files[f.relative_path]
-
-            for f in local_files:
-                comparison.upload.append(local_files[f])
-        else:
-            # In this case there are just new files
-            comparison.upload = local
-
-        return comparison
-
-
 class SyncClassifier:
     def __init__(self):
         self.action = None
+        self.updated_local = list()
+        self.updated_cloud = list()
 
-    def classify(cls, local, cloud):
+    def get_action(self):
+        if len(self.updated_local) == 0 and len(self.updated_cloud) > 0:
+            self.action = SyncAction.DOWNLOAD
+
+        elif len(self.updated_local) > 0 and len(self.updated_cloud) == 0:
+            self.action = SyncAction.UPLOAD
+
+        elif len(self.updated_local) == 0 and len(self.updated_cloud) == 0:
+            self.action = SyncAction.NONE
+
+        else:
+            self.action = SyncAction.CONFLICT
+
+        return self.action
+
+    @classmethod
+    def classify(cls, local, cloud, timestamp):
         classifier = cls()
+
+        for f in local:
+
+            if f.update_ts > timestamp:
+                classifier.updated_local.append(f)
+
+        for f in cloud:
+
+            if f.update_ts > timestamp:
+                classifier.updated_cloud.append(f)
+
+        return classifier
