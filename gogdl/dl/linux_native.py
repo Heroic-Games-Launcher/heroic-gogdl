@@ -58,7 +58,8 @@ def download(id, api_handler, arguments):
     if len(linux_installers) == 0:
         logger.error("Nothing do download")
         sys.exit(1)
-
+    directory_path, name = os.path.split(install_path)
+    os.makedirs(directory_path, exist_ok=True)
     download_installer(arguments, linux_installers, api_handler, install_path)
 
     for dlc in owned_dlcs:
@@ -137,7 +138,7 @@ def download_installer(
     if is_dlc:
         command = f'cp -r "{gamefiles_path}"/* "{install_path}"'
     logger.info("Moving game files")
-    subprocess.run(command, shell=True, encoding="utf-8")
+    subprocess.run(command.encode("utf-8"), shell=True, encoding="utf-8")
 
     shutil.rmtree(unpacked_path)
 
