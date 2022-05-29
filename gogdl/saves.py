@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import requests
 import hashlib
@@ -127,21 +128,21 @@ class CloudStorageManager:
         classifier = SyncClassifier.classify(local_files, cloud_files, timestamp)
 
         action = classifier.get_action()
-        print(action)
+        # print(action)
 
         if prefered_action:
-            if prefered_action == 'forceupload':
+            if prefered_action == "forceupload":
                 self.logger.warning("Forcing upload")
                 action = SyncAction.UPLOAD
-            elif prefered_action == 'forcedownload':
+            elif prefered_action == "forcedownload":
                 self.logger.warning("Forcing download")
                 action = SyncAction.DOWNLOAD
-            if prefered_action == 'upload' and action == SyncAction.DOWNLOAD:
-                self.logger.error("Refused to upload files, newer files in the cloud")
+            if prefered_action == "upload" and action == SyncAction.DOWNLOAD:
+                self.logger.warning("Refused to upload files, newer files in the cloud")
                 print(self.arguments.timestamp)
                 return
-            elif prefered_action == 'download' and action == SyncAction.UPLOAD:
-                self.logger.error("Refused to download files, newer files locally")
+            elif prefered_action == "download" and action == SyncAction.UPLOAD:
+                self.logger.warning("Refused to download files, newer files locally")
                 print(self.arguments.timestamp)
                 return
 
@@ -153,13 +154,14 @@ class CloudStorageManager:
             for f in classifier.updated_cloud:
                 self.download_file(f)
         elif action == SyncAction.CONFLICT:
-            self.logger.error(
+            self.logger.warning(
                 "Files in conflict force downloading or uploading of files"
             )
         elif action == SyncAction.NONE:
             self.logger.info("Nothing to do")
 
-        print(datetime.datetime.now().timestamp())
+        sys.stdout.write(str(datetime.datetime.now().timestamp()))
+        sys.stdout.flush()
         self.logger.info("Done")
 
     def get_auth_token(self):
@@ -266,7 +268,8 @@ class CloudStorageManager:
         os.utime(file.absolute_path, (f_timestamp, f_timestamp))
 
     def _get_token_gen_url(self, client_id: str, client_secret: str) -> str:
-        return f"https://auth.gog.com/token?client_id={client_id}&client_secret={client_secret}&grant_type=refresh_token&refresh_token={self.arguments.token}&without_new_session=1"
+        refresh_token = self.arguments.token.strip('"')
+        return f"https://auth.gog.com/token?client_id={client_id}&client_secret={client_secret}&grant_type=refresh_token&refresh_token={refresh_token}&without_new_session=1"
 
 
 class SyncClassifier:

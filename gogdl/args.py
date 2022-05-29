@@ -124,6 +124,33 @@ def init_parser():
         help="Provide refresh_token to generate game specific auth keys",
         required=False,
     )
-    save_parser.add_argument("-p","--prefer", dest="prefered_action", choices=["download","upload","forcedownload","forceupload"], help="Provide prefered sync action. If not provided it will try to guess latest save based on timestamp")
+
+    save_parser.add_argument(
+        "--skip-download", dest="prefered_action", action="store_const", const="upload"
+    )
+    save_parser.add_argument(
+        "--skip-upload", dest="prefered_action", action="store_const", const="download"
+    )
+    save_parser.add_argument(
+        "--force-upload",
+        dest="prefered_action",
+        action="store_const",
+        const="forceupload",
+    )
+    save_parser.add_argument(
+        "--force-download",
+        dest="prefered_action",
+        action="store_const",
+        const="forceupload",
+    )
+
+    save_parser.add_argument(
+        "--os",
+        "--platform",
+        dest="platform",
+        help="Target opearting system",
+        choices=["windows", "osx", "linux"],
+        required=True,
+    )
 
     return parser.parse_known_args()
