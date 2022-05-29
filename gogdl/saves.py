@@ -83,6 +83,7 @@ class CloudStorageManager:
         return path.replace(root, "")
 
     def sync(self, arguments, unknown_args):
+        prefered_action = arguments.prefered_action
         self.sync_path = os.path.normpath(arguments.path)
         self.sync_path = self.sync_path.replace("\\", os.sep)
 
@@ -127,6 +128,23 @@ class CloudStorageManager:
 
         action = classifier.get_action()
         print(action)
+
+        if prefered_action:
+            if prefered_action == 'forceupload':
+                self.logger.warning("Forcing upload")
+                action = SyncAction.UPLOAD
+            elif prefered_action == 'forcedownload':
+                self.logger.warning("Forcing download")
+                action = SyncAction.DOWNLOAD
+            if prefered_action == 'upload' and action == SyncAction.DOWNLOAD:
+                self.logger.error("Refused to upload files, newer files in the cloud")
+                print(self.arguments.timestamp)
+                return
+            elif prefered_action == 'download' and action == SyncAction.UPLOAD:
+                self.logger.error("Refused to download files, newer files locally")
+                print(self.arguments.timestamp)
+                return
+
         # return
         if action == SyncAction.UPLOAD:
             for f in classifier.updated_local:
