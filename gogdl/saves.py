@@ -6,6 +6,7 @@ import hashlib
 import datetime
 import gzip
 import time
+from sys import exit
 from enum import Enum
 
 import gogdl.dl.dl_utils as dl_utils
@@ -85,15 +86,15 @@ class CloudStorageManager:
 
     def sync(self, arguments, unknown_args):
         prefered_action = arguments.prefered_action
-        self.sync_path = os.path.normpath(arguments.path)
+        self.sync_path = os.path.normpath(arguments.path.strip('"'))
         self.sync_path = self.sync_path.replace("\\", os.sep)
 
         self.arguments = arguments
         self.unknown_args = unknown_args
 
         if not os.path.exists(self.sync_path):
-            self.logger.error("Provided path doesn't exist")
-            exit(1)
+            self.logger.warning("Provided path doesn't exist, creating")
+            os.makedirs(self.sync_path, exist_ok=True)
         dir_list = self.create_directory_map(self.sync_path)
         if len(dir_list) == 0:
             self.logger.info("No files in directory")
