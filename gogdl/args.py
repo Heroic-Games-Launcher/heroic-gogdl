@@ -141,7 +141,7 @@ def init_parser():
         "--force-download",
         dest="prefered_action",
         action="store_const",
-        const="forceupload",
+        const="forcedownload",
     )
 
     save_parser.add_argument(
