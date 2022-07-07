@@ -149,9 +149,11 @@ class CloudStorageManager:
 
         # return
         if action == SyncAction.UPLOAD:
+            self.logger.info("Uploading files")
             for f in classifier.updated_local:
                 self.upload_file(f)
         elif action == SyncAction.DOWNLOAD:
+            self.logger.info("Downloading files")
             for f in classifier.updated_cloud:
                 self.download_file(f)
         elif action == SyncAction.CONFLICT:
@@ -215,8 +217,6 @@ class CloudStorageManager:
         )
 
     def upload_file(self, file: SyncFile):
-        self.logger.info(f"Uploading {file.relative_path}")
-
         compressed_data = gzip.compress(
             open(file.absolute_path, "rb").read(), 6, mtime=0
         )
@@ -235,11 +235,8 @@ class CloudStorageManager:
         if not response.ok:
             self.logger.error("There was an error uploading a file")
             return
-        self.logger.info(f"Successfully uploaded file {file.relative_path}")
 
     def download_file(self, file: SyncFile):
-        self.logger.info(f"Downloading {file.relative_path}")
-
         response = self.session.get(
             f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/saves/{file.relative_path}",
             stream=True,
