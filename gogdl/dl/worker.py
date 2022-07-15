@@ -1,5 +1,6 @@
+from threading import Thread
 from gogdl.dl import dl_utils
-from gogdl.dl.objects import DepotDirectory
+from gogdl.dl.objects.v2 import DepotDirectory
 from copy import copy
 from sys import platform as os_platform
 import shutil
