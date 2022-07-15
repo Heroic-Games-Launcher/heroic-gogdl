@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import gogdl.args as args
-from gogdl.dl import manager
+from gogdl.dl.managers import manager
 import gogdl.api as api
 import gogdl.imports as imports
 import gogdl.launch as launch

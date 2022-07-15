@@ -113,6 +113,7 @@ def classify_cdns(cdns, generation=2):
     return best
 
 
+
 def calculate_sum(path, function, read_speed_function=None):
     with open(path, "rb") as f:
         calculate = function()
