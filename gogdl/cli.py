@@ -4,6 +4,7 @@ from gogdl.dl import manager
 import gogdl.api as api
 import gogdl.imports as imports
 import gogdl.launch as launch
+import gogdl.saves as saves
 from gogdl import version as gogdl_version
 import logging
 
@@ -23,9 +24,11 @@ def main():
     if not arguments.command:
         print("No command provided!")
         return
-    api_handler = api.ApiHandler(arguments.token.strip('"') if arguments.token else None)
+    api_handler = api.ApiHandler(
+        arguments.token.strip('"') if arguments.token else None
+    )
     download_manager = manager.DownloadManager(api_handler)
-
+    clouds_storage_manager = saves.CloudStorageManager(api_handler)
     switcher = {
         "download": download_manager.download,
         "repair": download_manager.download,
@@ -33,6 +36,7 @@ def main():
         "import": imports.get_info,
         "info": download_manager.calculate_download_size,
         "launch": launch.launch,
+        "save-sync": clouds_storage_manager.sync,
     }
 
     function = switcher.get(arguments.command)
