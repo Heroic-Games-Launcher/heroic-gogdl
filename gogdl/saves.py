@@ -134,9 +134,11 @@ class CloudStorageManager:
         if prefered_action:
             if prefered_action == "forceupload":
                 self.logger.warning("Forcing upload")
+                classifier.updated_local = local_files
                 action = SyncAction.UPLOAD
             elif prefered_action == "forcedownload":
                 self.logger.warning("Forcing download")
+                classifier.updated_cloud = cloud_files
                 action = SyncAction.DOWNLOAD
             if prefered_action == "upload" and action == SyncAction.DOWNLOAD:
                 self.logger.warning("Refused to upload files, newer files in the cloud")
@@ -233,7 +235,9 @@ class CloudStorageManager:
         )
 
         if not response.ok:
-            self.logger.error("There was an error uploading a file")
+            self.logger.error(
+                f"There was an error uploading a file \n{response.status_code}\n{response.content}"
+            )
             return
 
     def download_file(self, file: SyncFile):
