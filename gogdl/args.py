@@ -124,7 +124,7 @@ def init_parser():
         help="Provide refresh_token to generate game specific auth keys",
         required=False,
     )
-
+    save_parser.add_argument("--name", dest="dirname", default="__default")
     save_parser.add_argument(
         "--skip-download", dest="prefered_action", action="store_const", const="upload"
     )

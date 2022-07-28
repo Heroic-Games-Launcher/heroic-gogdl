@@ -88,7 +88,7 @@ class CloudStorageManager:
         prefered_action = arguments.prefered_action
         self.sync_path = os.path.normpath(arguments.path.strip('"'))
         self.sync_path = self.sync_path.replace("\\", os.sep)
-
+        self.cloud_save_dir_name = arguments.dirname
         self.arguments = arguments
         self.unknown_args = unknown_args
 
@@ -117,12 +117,14 @@ class CloudStorageManager:
             self.logger.info("No files in cloud, uploading")
             for f in local_files:
                 self.upload_file(f)
+            self.logger.info("Done")
             return
         elif len(local_files) == 0 and len(cloud_files) > 0:
             self.logger.info("No files locally, downloading")
             action = SyncAction.DOWNLOAD
             for f in cloud_files:
                 self.download_file(f)
+            self.logger.info("Done")
             return
 
         timestamp = float(arguments.timestamp)
@@ -177,6 +179,9 @@ class CloudStorageManager:
             {"Authorization": f"Bearer {self.credentials['access_token']}"}
         )
 
+    def is_in_our_dir(self, value):
+        return value["name"].startswith(self.cloud_save_dir_name)
+
     def get_cloud_files_list(self):
         response = self.session.get(
             f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}",
@@ -190,14 +195,19 @@ class CloudStorageManager:
         # print(json_res)
         self.logger.info(f"Files in cloud: {len(json_res)}")
 
+        filtered = filter(self.is_in_our_dir, json_res)
+
         files = [
             SyncFile(
-                sync_f["name"].replace("saves/", "", 1),
-                os.path.join(self.sync_path, sync_f["name"].replace("saves/", "", 1)),
+                sync_f["name"].replace(f"{self.cloud_save_dir_name}/", "", 1),
+                os.path.join(
+                    self.sync_path,
+                    sync_f["name"].replace(f"{self.cloud_save_dir_name}/", "", 1),
+                ),
                 md5=sync_f["hash"],
                 update_time=sync_f["last_modified"],
             )
-            for sync_f in json_res
+            for sync_f in filtered
         ]
 
         return files
@@ -215,7 +225,7 @@ class CloudStorageManager:
     def delete_file(self, file: SyncFile):
         self.logger.info(f"Deleting {file.relative_path}")
         response = self.session.delete(
-            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/saves/{file.relative_path}",
+            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{file.relative_path}",
         )
 
     def upload_file(self, file: SyncFile):
@@ -229,7 +239,7 @@ class CloudStorageManager:
         }
 
         response = self.session.put(
-            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/saves/{file.relative_path}",
+            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{file.relative_path}",
             data=compressed_data,
             headers=headers,
         )
@@ -242,7 +252,7 @@ class CloudStorageManager:
 
     def download_file(self, file: SyncFile):
         response = self.session.get(
-            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/saves/{file.relative_path}",
+            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{file.relative_path}",
             stream=True,
         )
 
