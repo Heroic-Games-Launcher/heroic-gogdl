@@ -5,8 +5,6 @@ import requests
 import hashlib
 import datetime
 import gzip
-import time
-from sys import exit
 from enum import Enum
 
 import gogdl.dl.dl_utils as dl_utils

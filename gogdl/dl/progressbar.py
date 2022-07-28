@@ -1,8 +1,5 @@
-import sys
 import threading
-import json
 import logging
-from gogdl.dl import dl_utils
 from time import sleep, time
 
 

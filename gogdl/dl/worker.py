@@ -1,12 +1,10 @@
-from threading import Thread
-from gogdl.dl import objects, dl_utils
+from gogdl.dl import dl_utils
 from gogdl.dl.objects import DepotDirectory
 from copy import copy
 from sys import platform as os_platform
 import shutil
 import hashlib
 import zlib
-import time
 import logging
 import os
 import stat
@@ -95,7 +93,7 @@ class DLWorker:
 
             try:
                 shutil.copy(file_path, dest_path)
-            except:
+            except Exception:
                 pass
 
         self.completed = True

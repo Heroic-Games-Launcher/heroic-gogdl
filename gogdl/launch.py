@@ -3,7 +3,6 @@ import json
 import sys
 import subprocess
 import shlex
-import shutil
 
 # Supports launching linux builds
 def launch(arguments, unknown_args):

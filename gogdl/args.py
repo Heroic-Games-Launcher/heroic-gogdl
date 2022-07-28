@@ -1,6 +1,5 @@
 # Initialize argparse module and return arguments
 import argparse
-import sys
 
 
 def init_parser():
