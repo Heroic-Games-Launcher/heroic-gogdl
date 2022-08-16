@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gogdl"
+description = "GOG Downloading module for Heroic Games Launcher"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["GOG", "HGL", "Heroic Games Launcher", "Games"]
+license = { text = "GPL-3" }
+authors = [
+  { name = "imLinguin", email = "lidwinpawel@gmail.com" }
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Environment :: Console",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Topic :: Games/Entertainment",
+  "Operating System :: OS Independent",
+  "Operating System :: POSIX",
+  "Operating System :: POSIX :: BSD",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: Implementation :: CPython"
+]
+dependencies = [
+  "setuptools",
+  "requests"
+]
+dynamic = ["version"]
+
+[project.scripts]
+gogdl = "gogdl.cli:main"
+
+[project.urls]
+Issues = "https://github.com/Heroic-Games-Launcher/heroic-gogdl/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "gogdl.version"}
