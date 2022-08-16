@@ -5,7 +5,6 @@ from gogdl import constants
 import os
 import xml.etree.ElementTree as ET
 import sys
-import json
 import subprocess
 import logging
 import hashlib

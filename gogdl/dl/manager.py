@@ -1,10 +1,6 @@
 import os
-import locale
 import logging
 import json
-import requests
-import threading
-from time import sleep
 from sys import platform
 from multiprocessing import cpu_count
 from gogdl.dl import dl_utils, objects, linux_native

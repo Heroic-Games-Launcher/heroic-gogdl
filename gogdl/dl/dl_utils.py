@@ -2,9 +2,8 @@ import json
 import zlib
 import os
 import gogdl.constants as constants
-import hashlib
 import shutil
-from sys import platform, exit
+from sys import exit
 PATH_SEPARATOR = os.sep
 
 def get_json(api_handler, url):
@@ -22,7 +21,6 @@ def get_zlib_encoded(api_handler, url):
         decompressed = json.loads(zlib.decompress(x.content, 15))
     except zlib.error:
         return json.loads(x.content), x.headers
-        pass
     return decompressed, x.headers
 
 
