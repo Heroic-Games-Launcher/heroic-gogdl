@@ -1,5 +1,7 @@
 # Initialize argparse module and return arguments
 import argparse
+import sys
+from multiprocessing import cpu_count
 
 
 def init_parser():

@@ -101,7 +101,7 @@ def merge_url_with_params(url, parameters):
 
 
 def parent_dir(path: str):
-    return path[0: path.rindex(PATH_SEPARATOR)]
+    return os.path.split(path)[0]
 
 
 def classify_cdns(cdns, generation=2):

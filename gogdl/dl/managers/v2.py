@@ -1,8 +1,11 @@
 # Handle newer depots download
 # This was introduced in GOG Galaxy 2.0, it features compression and files split by chunks
 import gogdl.dl.objects.v2 as v2
+from gogdl.dl.workers.v2 import DLWorker
+from gogdl.dl.progressbar import ProgressBar
 from gogdl.dl import dl_utils
 from gogdl import constants
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import logging
 
@@ -12,7 +15,10 @@ class Manager:
         self.game_id = generic_manager.game_id
         self.arguments = generic_manager.arguments
         self.unknown_arguments = generic_manager.unknown_arguments
-        self.path = self.arguments.path
+        if "path" in self.arguments:
+            self.path = self.arguments.path
+        else:
+            self.path = ""
 
         self.api_handler = generic_manager.api_handler
 
@@ -77,10 +83,34 @@ class Manager:
                     )
                 }
             )
+        workers = list()
+        threads = list()
+        thread_pool = ThreadPoolExecutor(self.arguments.workers_count)
 
         for file in diff.deleted:
             file_path = os.path.join(self.path, file.path)
             print(f"TODO: Remove file {file_path}")
+
+        for directory in self.manifest.dirs:
+            os.makedirs(os.path.join(self.path, directory.path), exist_ok=True)
+
+        for file in diff.new:
+            worker = DLWorker(
+                file,
+                self.path,
+                self.api_handler,
+                file.product_id,
+                secure_links[file.product_id],
+            )
+            workers.append(worker)  # Register workers
+
+        for worker in workers:
+            threads.append(thread_pool.submit(worker.work))  # Begin execution
+
+        for thread in as_completed(threads):
+            if thread.cancelled():
+                self.cancelled = True
+                break
 
     def get_meta(self):
         meta_url = self.build["link"]
@@ -91,7 +121,7 @@ class Manager:
         if self.arguments.command != "verify" and self.arguments.command != "update":
             self.path = os.path.join(self.path, self.meta["installDirectory"])
 
-    def get_dlcs_user_owns(self, info_command=False, requested_dlcs=list):
+    def get_dlcs_user_owns(self, info_command=False, requested_dlcs=list()):
         if not self.dlcs_should_be_downloaded and not info_command:
             return []
         self.logger.debug("Getting dlcs user owns")
