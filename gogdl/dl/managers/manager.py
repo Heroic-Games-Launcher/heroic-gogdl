@@ -15,11 +15,10 @@ class Manager:
 
         self.platform = arguments.platform
         self.game_id = arguments.id
-        self.allowed_threads = (
-            int(arguments.workers_count)
-            if int(arguments.workers_count) > 0
-            else cpu_count()
-        )
+        if "workers_count" in arguments:
+            self.allowed_threads = arguments.workers_count
+        else:
+            self.allowed_threads = cpu_count()
 
         self.logger = logging.getLogger("GENERIC DOWNLOAD_MANAGER")
 
