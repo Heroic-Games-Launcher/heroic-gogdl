@@ -14,7 +14,6 @@ class ProgressBar(threading.Thread):
         self.last_update = time()
         self.total_readable_size = total_readable_size
         self.completed = False
-        self.speed_snapshots = list()
 
         super().__init__(target=self.print_progressbar)
 
@@ -26,34 +25,29 @@ class ProgressBar(threading.Thread):
                 break
             percentage = (self.downloaded / self.total) * 100
             running_time = time() - self.started_at
-            runtime_h = int(running_time // 3600), 
-            running_time = running_time % 3600
-            runtime_m = int(running_time // 60)
-            runtime_s = int(running_time % 60)
+            runtime_h = int(running_time // 3600)
+            runtime_m = int((running_time % 3600) // 60)
+            runtime_s = int((running_time % 3600) % 60)
 
             time_since_last_update = time() - self.last_update
             size_left = self.total - self.downloaded
 
-            download_speed = self.downloaded_since_update / max(time_since_last_update,0.1)
-            self.speed_snapshots.append(download_speed)
-            if len(self.speed_snapshots) > 5:
-                self.speed_snapshots.pop(0)
-            average_speed = 0
-            for snapshot in self.speed_snapshots:
-                average_speed += snapshot
-            average_speed = average_speed / len(self.speed_snapshots)
+            average_speed = self.downloaded / running_time
 
-            estimated_time = size_left / average_speed
+            if percentage > 0:
+                estimated_time = (100 * running_time) / percentage - running_time
+            else:
+                estimated_time = 0
+
 
             estimated_h = int(estimated_time // 3600)
             estimated_time = estimated_time % 3600
             estimated_m = int(estimated_time // 60)
             estimated_s = int(running_time % 60)
-
             self.logger.info(f'= Progress: {percentage:.02f} {self.downloaded}/{self.total}, '+
                             # TODO: Figure out why this line below is throwing an error
-                            #  f'Running for: {runtime_h:02d}:{runtime_m:02d}:{runtime_s:02d}, '+
-                             f'Running for: 00:00:00, '+
+                             f'Running for: {runtime_h:02d}:{runtime_m:02d}:{runtime_s:02d}, '+
+                            #  f'Running for: 00:00:00, '+
                              f'ETA: {estimated_h:02d}:{estimated_m:02d}:{estimated_s:02d}')
             self.logger.info(f'= Downloaded: {self.downloaded / 1024 / 1024:.02f} MiB')
             self.downloaded_since_update = 1
