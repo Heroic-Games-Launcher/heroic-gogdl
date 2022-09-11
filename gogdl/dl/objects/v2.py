@@ -44,12 +44,13 @@ class Depot:
 
 
 class Manifest:
-    def __init__(self, meta, language, dlcs, api_handler):
+    def __init__(self, meta, language, dlcs, api_handler, dlc_only):
         self.data = meta
         self.data["HGLInstallLanguage"] = language
         self.data["HGLdlcs"] = dlcs
         self.product_id = meta["baseProductId"]
         self.dlcs = dlcs
+        self.dlc_only = dlc_only
         self.depots = self.parse_depots(language, meta["depots"])
         self.dependencies_ids = meta.get("dependencies")
         self.install_directory = meta["installDirectory"]
@@ -69,8 +70,11 @@ class Manifest:
 
     def parse_depots(self, language, depots):
         parsed = []
+        dlc_ids = [dlc["id"] for dlc in self.dlcs]
         for depot in depots:
-            if depot["productId"] in self.dlcs or self.product_id == depot["productId"]:
+            if depot["productId"] in dlc_ids or (
+                not self.dlc_only and self.product_id == depot["productId"]
+            ):
                 parsed.append(Depot(language, depot))
 
         return filter(lambda x: x.check_language(), parsed)
@@ -103,7 +107,7 @@ class Manifest:
             for item in manifest["depot"]["items"]:
                 obj = None
                 if item["type"] == "DepotFile":
-                    self.files.append(DepotFile(item, self.product_id))
+                    self.files.append(DepotFile(item, depot.product_id))
                 else:
                     self.dirs.append(DepotDirectory(item))
 
