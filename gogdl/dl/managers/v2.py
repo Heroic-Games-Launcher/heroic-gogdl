@@ -28,6 +28,7 @@ class Manager:
         self.lang = self.arguments.lang
         self.dlcs_should_be_downloaded = self.arguments.dlcs
         self.dlcs_list = self.arguments.dlcs_list
+        self.dlc_only = self.arguments.dlc_only
         self.logger = logging.getLogger("V2")
         self.logger.info("Initialized V2 Download Manager")
 
@@ -61,19 +62,18 @@ class Manager:
         self.logger.debug("Parsing manifest")
 
         self.manifest = v2.Manifest(
-            self.meta, self.lang, dlcs_user_owns, self.api_handler
+            self.meta, self.lang, dlcs_user_owns, self.api_handler, self.dlc_only
         )
-        old_manifest = None
+        old_manifest = None  # TODO: Load old manifest
 
         self.manifest.get_files()
         diff = v2.ManifestDiff.compare(self.manifest, old_manifest)
 
         self.logger.info(diff)
 
-        secure_link_endpoints_ids = [self.game_id] + [
-            product["id"] for product in dlcs_user_owns
-        ]
-
+        secure_link_endpoints_ids = [product["id"] for product in dlcs_user_owns]
+        if not self.dlc_only:
+            secure_link_endpoints_ids.append(self.game_id)
         secure_links = dict()
         for product_id in secure_link_endpoints_ids:
             secure_links.update(
@@ -118,7 +118,7 @@ class Manager:
         self.version_etag = headers.get("Etag")
 
         # Append folder name when downloading
-        if self.arguments.command != "verify" and self.arguments.command != "update":
+        if self.arguments.command != "repair" and self.arguments.command != "update":
             self.path = os.path.join(self.path, self.meta["installDirectory"])
 
     def get_dlcs_user_owns(self, info_command=False, requested_dlcs=list()):
@@ -136,7 +136,6 @@ class Manager:
                     dlcs.append({"title": product["name"], "id": product["productId"]})
             return dlcs
         for product in self.meta["products"]:
-
             if product["productId"] != self.game_id and self.api_handler.does_user_own(
                 product["productId"]
             ):
