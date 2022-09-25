@@ -5,9 +5,8 @@ from time import sleep, time
 
 class ProgressBar(threading.Thread):
     def __init__(self, max_val, total_readable_size, length):
-        self.logger = logging.getLogger('PROGRESS')
+        self.logger = logging.getLogger("PROGRESS")
         self.downloaded = 0
-        self.downloaded_since_update = 1
         self.total = max_val
         self.length = length
         self.started_at = time()
@@ -15,13 +14,21 @@ class ProgressBar(threading.Thread):
         self.total_readable_size = total_readable_size
         self.completed = False
 
+        self.read_total = 0
+        self.written_total = 0
+
+        self.written_since_last_update = 0
+        self.read_since_last_update = 0
+        self.downloaded_since_last_update = 0
+        self.decompressed_since_last_update = 0
+
         super().__init__(target=self.print_progressbar)
 
     def print_progressbar(self):
         done = 0
 
         while True:
-            if(self.completed):
+            if self.completed:
                 break
             percentage = (self.downloaded / self.total) * 100
             running_time = time() - self.started_at
@@ -39,21 +46,60 @@ class ProgressBar(threading.Thread):
             else:
                 estimated_time = 0
 
-
             estimated_h = int(estimated_time // 3600)
             estimated_time = estimated_time % 3600
             estimated_m = int(estimated_time // 60)
             estimated_s = int(running_time % 60)
-            self.logger.info(f'= Progress: {percentage:.02f} {self.downloaded}/{self.total}, '+
-                            # TODO: Figure out why this line below is throwing an error
-                             f'Running for: {runtime_h:02d}:{runtime_m:02d}:{runtime_s:02d}, '+
-                            #  f'Running for: 00:00:00, '+
-                             f'ETA: {estimated_h:02d}:{estimated_m:02d}:{estimated_s:02d}')
-            self.logger.info(f'= Downloaded: {self.downloaded / 1024 / 1024:.02f} MiB')
-            self.downloaded_since_update = 1
+
+            write_speed = self.written_since_last_update / time_since_last_update
+            read_speed = self.read_since_last_update / time_since_last_update
+            download_speed = self.downloaded_since_last_update / time_since_last_update
+            decompress_speed = (
+                self.decompressed_since_last_update / time_since_last_update
+            )
+
+            self.read_total += self.read_since_last_update
+            self.written_total += self.written_since_last_update
+            self.downloaded += self.downloaded_since_last_update
+
+            self.read_since_last_update = self.written_since_last_update = 0
+            self.decompressed_since_last_update = self.downloaded_since_last_update = 0
+
+            self.logger.info(
+                f"= Progress: {percentage:.02f} {self.downloaded}/{self.total}, "
+                + f"Running for: {runtime_h:02d}:{runtime_m:02d}:{runtime_s:02d}, "
+                + f"ETA: {estimated_h:02d}:{estimated_m:02d}:{estimated_s:02d}"
+            )
+
+            self.logger.info(
+                f"= Downloaded: {self.downloaded / 1024 / 1024:.02f} MiB, "
+                f"Written: {self.written_total / 1024 / 1024:.02f} MiB"
+            )
+
+            self.logger.info(
+                f" + Download\t- {download_speed / 1024 / 1024:.02f} MiB/s (raw) "
+                f"/ {decompress_speed / 1024 / 1024:.02f} MiB/s (decompressed)"
+            )
+
+            self.logger.info(
+                f" + Disk\t- {write_speed / 1024 / 1024:.02f} MiB/s (write) / "
+                f"{read_speed / 1024 / 1024:.02f} MiB/s (read)"
+            )
+
+            self.last_update = time()
             sleep(1)
+
     def update_downloaded_size(self, addition):
-        self.downloaded+=addition
+        self.downloaded += addition
 
     def update_download_speed(self, addition):
-        self.downloaded_since_update+=addition
+        self.downloaded_since_last_update += addition
+
+    def update_decompressed_speed(self, addition):
+        self.decompressed_since_last_update += addition
+
+    def update_bytes_read(self, addition):
+        self.read_since_last_update += addition
+
+    def update_bytes_written(self, addition):
+        self.written_since_last_update += addition
