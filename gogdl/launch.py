@@ -3,6 +3,7 @@ import json
 import sys
 import subprocess
 import shlex
+import signal
 
 # Supports launching linux builds
 def launch(arguments, unknown_args):
@@ -75,6 +76,7 @@ def launch(arguments, unknown_args):
         working_dir = get_case_insensitive_name(arguments.path, working_dir)
 
     process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
+    signal.signal(signal.SIGTERM, process.terminate())
     status = process.wait()
     sys.exit(status)
 
