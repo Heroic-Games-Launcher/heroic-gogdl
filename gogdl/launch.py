@@ -2,7 +2,14 @@ import os
 import json
 import sys
 import subprocess
+import time
+from ctypes import *
+from gogdl.process import Process
+import signal
 import shlex
+
+class NoMoreChildren(Exception):
+    pass
 
 # Supports launching linux builds
 def launch(arguments, unknown_args):
@@ -74,8 +81,84 @@ def launch(arguments, unknown_args):
     if not os.path.exists(working_dir):
         working_dir = get_case_insensitive_name(arguments.path, working_dir)
 
-    process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
-    status = process.wait()
+    status = None
+    if sys.platform == 'linux':
+        libc = cdll.LoadLibrary("libc.so.6")
+        prctl = libc.prctl
+        result = prctl(36 ,1, 0, 0, 0, 0) # PR_SET_CHILD_SUBREAPER = 36
+
+        if result == -1:
+            print("PR_SET_CHILD_SUBREAPER is not supported by your kernel (Linux 3.4 and above)")
+        
+        process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
+        process_pid = process.pid
+
+        def iterate_processes():
+            for child in Process(os.getpid()).iter_children():
+                if child.state == 'Z':
+                    continue
+
+                if child.name:
+                    yield child
+
+        def hard_sig_handler(signum, _frame):
+            for _ in range(3):  # just in case we race a new process.
+                for child in Process(os.getpid()).iter_children():
+                    try:
+                        os.kill(child.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+
+        def sig_handler(signum, _frame):
+            signal.signal(signal.SIGTERM, hard_sig_handler)
+            signal.signal(signal.SIGINT, hard_sig_handler)
+            for _ in range(3):  # just in case we race a new process.
+                for child in Process(os.getpid()).iter_children():
+                    try:
+                        os.kill(child.pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+
+        def is_alive():
+            return next(iterate_processes(), None) is not None
+
+        signal.signal(signal.SIGTERM, sig_handler)
+        signal.signal(signal.SIGINT, sig_handler)
+
+        def reap_children():
+            nonlocal status
+            while True:
+                try:
+                    child_pid, child_returncode, _resource_usage = os.wait3(os.WNOHANG)
+                except ChildProcessError:
+                    raise NoMoreChildren from None  # No processes remain.
+                if child_pid == process_pid:
+                    status = child_returncode
+
+                if child_pid == 0:
+                    break
+
+        try:
+            # The initial wait loop:
+            #  the initial process may have been excluded. Wait for the game
+            #  to be considered "started".
+            if not is_alive():
+                while not is_alive():
+                    reap_children()
+                    time.sleep(0.1)
+            while is_alive():
+                reap_children()
+                time.sleep(0.1)
+            reap_children()
+        except NoMoreChildren:
+            print("All processes exited")
+
+
+    else:
+        process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
+        status = process.wait()
+
     sys.exit(status)
 
 
@@ -84,6 +167,7 @@ def get_primary_task(info):
     for task in info["playTasks"]:
         if task.get("isPrimary") == True:
             return task
+
 
 
 def load_game_info(path, id, platform):

@@ -49,7 +49,7 @@ class ProgressBar(threading.Thread):
             estimated_h = int(estimated_time // 3600)
             estimated_time = estimated_time % 3600
             estimated_m = int(estimated_time // 60)
-            estimated_s = int(running_time % 60)
+            estimated_s = int(estimated_time % 60)
 
             write_speed = self.written_since_last_update / time_since_last_update
             read_speed = self.read_since_last_update / time_since_last_update
