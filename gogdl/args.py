@@ -152,4 +152,26 @@ def init_parser():
         required=True,
     )
 
+    clear_parser = subparsers.add_parser("save-clear", help="Clear cloud game saves")
+    clear_parser.add_argument("path", help="Path to sync files")
+    clear_parser.add_argument("id", help="Game id")
+    clear_parser.add_argument(
+        "--token",
+        "-t",
+        dest="token",
+        help="Provide refresh_token to generate game specific auth keys",
+        required=False,
+    )
+    clear_parser.add_argument("--name", dest="dirname", default="__default")
+
+    clear_parser.add_argument(
+        "--os",
+        "--platform",
+        dest="platform",
+        help="Target opearting system",
+        choices=["windows", "osx", "linux"],
+        required=True,
+    )
+
+
     return parser.parse_known_args()
