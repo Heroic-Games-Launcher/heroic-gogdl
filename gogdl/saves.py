@@ -169,6 +169,21 @@ class CloudStorageManager:
         sys.stdout.flush()
         self.logger.info("Done")
 
+    def clear(self, arguments, unknown_args):
+        self.sync_path = os.path.normpath(arguments.path.strip('"'))
+        self.sync_path = self.sync_path.replace("\\", os.sep)
+        self.cloud_save_dir_name = arguments.dirname
+        self.arguments = arguments
+        self.unknown_args = unknown_args
+
+        self.client_id, self.client_secret = self.get_auth_ids()
+        self.get_auth_token()
+
+        cloud_files = self.get_cloud_files_list()
+        for f in cloud_files:
+            self.delete_file(f)
+        self.logger.info("Done")
+
     def get_auth_token(self):
         url = self._get_token_gen_url(self.client_id, self.client_secret)
 

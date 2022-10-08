@@ -38,6 +38,7 @@ def main():
         "info": download_manager.calculate_download_size,
         "launch": launch.launch,
         "save-sync": clouds_storage_manager.sync,
+        "save-clear": clouds_storage_manager.clear,
     }
 
     function = switcher.get(arguments.command)
