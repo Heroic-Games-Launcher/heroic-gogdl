@@ -13,7 +13,7 @@ logger = logging.getLogger("MAIN")
 
 
 def display_version():
-    print(f"Version: {gogdl_version}")
+    print(f"{gogdl_version}")
 
 
 def main():

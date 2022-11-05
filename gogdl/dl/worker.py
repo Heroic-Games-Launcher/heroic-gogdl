@@ -72,7 +72,6 @@ class DLWorker:
             download_path = os.path.join(item_path + f".tmp{index}")
             dl_utils.prepare_location(dl_utils.parent_dir(download_path), self.logger)
             self.get_file(url, download_path, compressed_md5, md5, index)
-            self.progress.update_downloaded_size(self.downloaded_size)
 
         for index in range(len(self.data.chunks)):
             self.decompress_file(item_path + f".tmp{index}", item_path)
@@ -101,9 +100,16 @@ class DLWorker:
     def decompress_file(self, compressed, decompressed):
         if os.path.exists(compressed):
             file = open(compressed, "rb")
-            dc = zlib.decompress(file.read(), 15)
+
+            read_data = file.read()
+            self.progress.update_bytes_read(len(read_data))
+
+            dc = zlib.decompress(read_data, 15)
             f = open(decompressed, "ab")
+
             f.write(dc)
+            self.progress.update_bytes_written(len(dc))
+            self.progress.update_decompressed_speed(len(dc))
             f.close()
             file.close()
             os.remove(compressed)
@@ -123,7 +129,12 @@ class DLWorker:
     def get_file(self, url, path, compressed_sum, decompressed_sum, index=0):
         isExisting = os.path.exists(path)
         if isExisting:
-            if dl_utils.calculate_sum(path, hashlib.md5) != compressed_sum:
+            if (
+                dl_utils.calculate_sum(
+                    path, hashlib.md5, self.progress.update_bytes_read
+                )
+                != compressed_sum
+            ):
                 os.remove(path)
             else:
                 return
@@ -133,18 +144,24 @@ class DLWorker:
             )
             total = response.headers.get("Content-Length")
             if total is None:
-                f.write(response.content)
+                self.progress.update_download_speed(len(response.content))
+                written = f.write(response.content)
+                self.progress.update_bytes_written(written)
             else:
                 total = int(total)
                 for data in response.iter_content(
                     chunk_size=max(int(total / 1000), 1024 * 1024)
                 ):
                     self.progress.update_download_speed(len(data))
-                    f.write(data)
+                    written = f.write(data)
+                    self.progress.update_bytes_written(written)
             f.close()
             isExisting = os.path.exists(path)
             if isExisting and (
-                dl_utils.calculate_sum(path, hashlib.md5) != compressed_sum
+                dl_utils.calculate_sum(
+                    path, hashlib.md5, self.progress.update_bytes_read
+                )
+                != compressed_sum
             ):
                 self.logger.warning(
                     f"Checksums dismatch for compressed chunk of {path}"
@@ -160,17 +177,25 @@ class DLWorker:
             if len(self.data.chunks) > 1:
                 if self.data.md5:
                     should_be = self.data.md5
-                    calculated = dl_utils.calculate_sum(item_path, hashlib.md5)
+                    calculated = dl_utils.calculate_sum(
+                        item_path, hashlib.md5, self.progress.update_bytes_read
+                    )
                 elif self.data.sha256:
                     should_be = self.data.sha256
-                    calculated = dl_utils.calculate_sum(item_path, hashlib.sha256)
+                    calculated = dl_utils.calculate_sum(
+                        item_path, hashlib.sha256, self.progress.update_bytes_read
+                    )
             else:
                 # In case if there are sha256 sums in chunks
                 if "sha256" in self.data.chunks[0]:
-                    calculated = dl_utils.calculate_sum(item_path, hashlib.sha256)
+                    calculated = dl_utils.calculate_sum(
+                        item_path, hashlib.sha256, self.progress.update_bytes_read
+                    )
                     should_be = self.data.chunks[0]["sha256"]
                 elif "md5" in self.data.chunks[0]:
-                    calculated = dl_utils.calculate_sum(item_path, hashlib.md5)
+                    calculated = dl_utils.calculate_sum(
+                        item_path, hashlib.md5, self.progress.update_bytes_read
+                    )
                     should_be = self.data.chunks[0]["md5"]
             return calculated == should_be
         else:
@@ -210,8 +235,6 @@ class DLWorkerV1:
                 os.remove(item_path)
         dl_utils.prepare_location(dl_utils.parent_dir(item_path), self.logger)
         self.get_file(item_path)
-        if not is_dependency:
-            self.progress.update_downloaded_size(int(self.data["size"]))
 
     def get_file(self, item_path):
         headers = {
@@ -223,24 +246,31 @@ class DLWorkerV1:
             )
             total = response.headers.get("Content-Length")
             if total is None:
-                f.write(response.content)
+                self.progress.update_download_speed(len(response.content))
+                written = f.write(response.content)
+                self.progress.update_bytes_written(written)
+
             else:
                 total = int(total)
                 for data in response.iter_content(
                     chunk_size=max(int(total / 1000), 1024 * 1024)
                 ):
                     self.progress.update_download_speed(len(data))
-                    f.write(data)
+                    written = f.write(data)
+                    self.progress.update_bytes_written(written)
+
             f.close()
             if os.path.exists(item_path):
                 if not self.verify_file(item_path):
-                    self.logger.warning(f"Checksums dismatch for file {item_path}")
+                    self.logger.warning(f"Checksums mismatch for file {item_path}")
                     os.remove(item_path)
                     self.get_file(item_path)
 
     def verify_file(self, item_path):
         if os.path.exists(item_path):
-            calculated = dl_utils.calculate_sum(item_path, hashlib.md5)
+            calculated = dl_utils.calculate_sum(
+                item_path, hashlib.md5, self.progress.update_bytes_read
+            )
             should_be = self.data["hash"]
             return calculated == should_be
         return False

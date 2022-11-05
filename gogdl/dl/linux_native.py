@@ -189,14 +189,16 @@ def get_file(url, path, api_handler, md5):
     with open(path, "ab") as f:
         if total is None:
             f.write(response.content)
+            progress_bar.update_bytes_written(len(response.content))
+            progress_bar.update_download_speed(len(response.content))
         else:
             total = int(total)
             for data in response.iter_content(
                 chunk_size=max(int(total / 1000), 1024 * 1024)
             ):
-                f.write(data)
                 progress_bar.update_download_speed(len(data))
-                progress_bar.update_downloaded_size(len(data))
+                written = f.write(data)
+                progress_bar.update_bytes_written(written)
     f.close()
     progress_bar.completed = True
     progress_bar.join()
