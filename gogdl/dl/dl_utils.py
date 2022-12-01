@@ -98,7 +98,7 @@ def classify_cdns(array, generation=2):
         cdns.append(item)
     best = None
     for cdn in cdns:
-        if not generation in cdn["supports_generation"]:
+        if generation not in cdn["supports_generation"]:
             continue
         if not best:
             best = cdn

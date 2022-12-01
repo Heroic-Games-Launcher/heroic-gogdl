@@ -1,21 +1,21 @@
-import os
-import logging
 import json
 from sys import platform
 from multiprocessing import cpu_count
-from gogdl.dl import dl_utils, objects, linux_native
+from gogdl.dl import objects, linux_native
 from gogdl.dl.worker import *
 from gogdl.dl.progressbar import ProgressBar
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import gogdl.constants as constants
 from sys import exit
 
-class DownloadManager():
+
+class DownloadManager:
     def __init__(self, api_handler):
         self.api_handler = api_handler
         self.logger = logging.getLogger('DOWNLOAD_MANAGER')
         self.logger.setLevel(logging.INFO)
-        self.lang = 'en' # This is the default now (won't be used in heroic), removed automatic detection since introduces crashes on MacOS. 
+        # This is the default (won't be used in heroic) removed automatic detection since introduces crashes on MacOS
+        self.lang = 'en'
         self.cancelled = False
         self.dlcs_should_be_downloaded = False
         self.dlc_ids = []
@@ -34,10 +34,10 @@ class DownloadManager():
 
     def calculate_download_size(self, args, unknown_args):
         if self.get_download_metadata(args):
-            # Ovverridde language to English when checking download size
+            # Override language to English when checking download size
             if self.depot_version == 1:
                 self.lang = 'English'
-            download_files,dependency_files = self.collect_depots()
+            download_files, dependency_files = self.collect_depots()
             size_data = self.calculate_size(download_files, dependency_files)
             download_size = size_data[0]
             disk_size = size_data[1]
@@ -63,14 +63,15 @@ class DownloadManager():
                         languages.append(lang)
 
             print(json.dumps({"download_size": download_size,
-                "disk_size": disk_size,
-                "dlcs": dlcs,
-                "buildId": self.builds['items'][0]["build_id"],
-                "languages": languages,
-                "folder_name": self.meta["installDirectory"] if self.depot_version == 2 else self.meta['product']['installDirectory'],
-                "versionEtag":self.versionEtag,
-                "versionName":self.versionName
-            }))
+                              "disk_size": disk_size,
+                              "dlcs": dlcs,
+                              "buildId": self.builds['items'][0]["build_id"],
+                              "languages": languages,
+                              "folder_name": self.meta["installDirectory"] if self.depot_version == 2 else
+                              self.meta['product']['installDirectory'],
+                              "versionEtag": self.versionEtag,
+                              "versionName": self.versionName
+                              }))
 
     def get_download_metadata(self, args):
 
@@ -100,7 +101,8 @@ class DownloadManager():
         self.logger.debug('Getting Build data')
         # Builds data
         self.builds = dl_utils.get_json(
-            self.api_handler, f'{constants.GOG_CONTENT_SYSTEM}/products/{self.dl_target["id"]}/os/{self.platform}/builds?generation=2')
+            self.api_handler,
+            f'{constants.GOG_CONTENT_SYSTEM}/products/{self.dl_target["id"]}/os/{self.platform}/builds?generation=2')
         # Just in case
         if self.builds['count'] == 0:
             self.logger.error('Nothing to download, exiting')
@@ -121,14 +123,15 @@ class DownloadManager():
         else:
             self.logger.error("Unsupported depot version please report this")
             return False
-        
+
         meta_url = target_build['link']
         self.logger.debug('Getting Meta data')
         self.meta, headers = dl_utils.get_zlib_encoded(self.api_handler, meta_url)
 
         self.versionEtag = headers.get("Etag")
         self.versionName = target_build['version_name']
-        install_directory = self.meta['installDirectory'] if self.depot_version == 2 else self.meta['product']['installDirectory']
+        install_directory = self.meta['installDirectory'] if self.depot_version == 2 else self.meta['product'][
+            'installDirectory']
         try:
             self.path = args.path
             if args.command == 'download':
@@ -138,13 +141,11 @@ class DownloadManager():
                 self.dl_path = self.path
         except AttributeError:
             pass
-        
+
         # Redist version is useful for V1 depots
         self.dependencies, self.redist_version = self.handle_dependencies()
 
         return True
-
-
 
     def collect_depots(self):
         collected_depots = []
@@ -161,7 +162,8 @@ class DownloadManager():
                             self.dlc_ids.append(dlc['productId'])
 
             for depot in self.meta['depots']:
-                if str(depot['productId']) == str(self.dl_target['id']) or self.dlcs_should_be_downloaded and (depot['productId'] in owned_dlcs):
+                if str(depot['productId']) == str(self.dl_target['id']) or self.dlcs_should_be_downloaded and (
+                        depot['productId'] in owned_dlcs):
                     # TODO: Respect user language
                     newObject = objects.Depot(self.lang, depot)
                     if newObject.check_language():
@@ -177,17 +179,20 @@ class DownloadManager():
                     depot_object = objects.DepotV1(self.lang, depot)
                     if depot_object.check_language():
                         collected_depots.append(depot_object)
-        
+
         self.logger.debug(
             f"Collected {len(collected_depots)} depots, proceeding to download, Dependencies Depots: {len(self.dependencies)}")
         if self.depot_version == 2:
             for depot in collected_depots:
                 manifest = dl_utils.get_zlib_encoded(
-                    self.api_handler, f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}')[0]
+                    self.api_handler,
+                    f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}')[0]
                 download_files += self.get_depot_list(manifest, depot.product_id)
             for depot in self.dependencies:
                 manifest = dl_utils.get_zlib_encoded(
-                    self.api_handler, f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}')[0]
+                    self.api_handler,
+                    f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}')[
+                    0]
                 dependency_files += self.get_depot_list(manifest)
         else:
             for depot in collected_depots:
@@ -205,15 +210,23 @@ class DownloadManager():
                     if repo['depot']['files'][redist_file]['path'][0] == '/':
                         repo['depot']['files'][redist_file]['path'] = repo['depot']['files'][redist_file]['path'][1:]
 
-                    repo['depot']['files'][redist_file]['path'] = os.path.join(depot['path'], repo['depot']['files'][redist_file]['path'])
+                    repo['depot']['files'][redist_file]['path'] = os.path.join(depot['path'],
+                                                                               repo['depot']['files'][redist_file][
+                                                                                   'path'])
                     redistributable_id, file_name = repo['depot']['files'][redist_file]['url'].split('/')
 
-                    cdn_json = dl_utils.get_json(self.api_handler, f"{constants.GOG_CONTENT_SYSTEM}/open_link?_version=2&generation=1&path=redists/{redistributable_id}/{self.redist_version}")
+                    cdn_json = dl_utils.get_json(self.api_handler,
+                                                 f"{constants.GOG_CONTENT_SYSTEM}/open_link?_version=2&generation=1&path=redists/{redistributable_id}/{self.redist_version}")
                     cdn = dl_utils.classify_cdns(cdn_json['urls'], 1)
-                    repo['depot']['files'][redist_file]['link'] = cdn['url']+'/main.bin'
+                    if 'url' not in cdn:
+                        self.logger.info(
+                            f"Couldn't get cdn url for dependency {redistributable_id}/{self.redist_version}")
+                        break
+                    repo['depot']['files'][redist_file]['link'] = cdn['url'] + '/main.bin'
 
                 dependency_files.extend(repo['depot']['files'])
         return download_files, dependency_files
+
     # V2 downloading
     def perform_download(self):
         # print(self.meta)
@@ -228,7 +241,6 @@ class DownloadManager():
 
         self.logger.debug(
             f"Downloading {len(download_files)} game files, and {len(dependency_files)} dependency files proceeding")
-        
 
         size_data = self.calculate_size(download_files, dependency_files)
         download_size = size_data[0]
@@ -244,7 +256,8 @@ class DownloadManager():
             return False
         allowed_threads = max(1, self.allowed_threads)
         self.logger.debug("Spawning progress bar process")
-        self.progress = ProgressBar(download_size, f"{round(readable_download_size[0], 2)}{readable_download_size[1]}", 50)
+        self.progress = ProgressBar(download_size, f"{round(readable_download_size[0], 2)}{readable_download_size[1]}",
+                                    50)
         self.progress.start()
 
         self.thpool = ThreadPoolExecutor(max_workers=allowed_threads)
@@ -269,18 +282,20 @@ class DownloadManager():
                 self.cancelled = True
                 break
 
-        #TODO: Get game icon, for shortcuts
+        # TODO: Get game icon, for shortcuts
         self.progress.completed = True
         return not self.cancelled
 
     def perform_download_V1(self):
         self.logger.debug("Redirecting download to V1 handler")
-        
+
         download_files, dependency_files = self.collect_depots()
 
         dl_utils.prepare_location(self.dl_path, self.logger)
-        link = dl_utils.get_secure_link(self.api_handler, f"/{self.platform}/{self.builds['items'][0]['legacy_build_id']}", self.dl_target['id'], generation=1)
-        
+        link = dl_utils.get_secure_link(self.api_handler,
+                                        f"/{self.platform}/{self.builds['items'][0]['legacy_build_id']}",
+                                        self.dl_target['id'], generation=1)
+
         size_data = self.calculate_size(download_files, [])
         download_size = size_data[0]
         disk_size = size_data[1]
@@ -293,20 +308,23 @@ class DownloadManager():
         self.thpool = ThreadPoolExecutor(max_workers=allowed_threads)
 
         self.logger.debug("Spawning progress bar process")
-        self.progress = ProgressBar(download_size, f"{round(readable_download_size[0], 2)}{readable_download_size[1]}", 50)
+        self.progress = ProgressBar(download_size, f"{round(readable_download_size[0], 2)}{readable_download_size[1]}",
+                                    50)
         self.progress.start()
         self.threads = []
         for download_file in download_files:
-            worker = DLWorkerV1(download_file, self.dl_path, link, self.api_handler, self.dl_target['id'], self.progress)
+            worker = DLWorkerV1(download_file, self.dl_path, link, self.api_handler, self.dl_target['id'],
+                                self.progress)
             thread = self.thpool.submit(worker.do_stuff, False)
             self.threads.append(thread)
             # worker.do_stuff(False)
-        
+
         for download_file in dependency_files:
-            worker = DLWorkerV1(download_file, self.dl_path, download_file['link'], self.api_handler, self.dl_target['id'], self.progress)
+            worker = DLWorkerV1(download_file, self.dl_path, download_file['link'], self.api_handler,
+                                self.dl_target['id'], self.progress)
             thread = self.thpool.submit(worker.do_stuff, True)
             self.threads.append(thread)
-            
+
             # worker.do_stuff(True)
 
         for thread in as_completed(self.threads):
@@ -317,7 +335,6 @@ class DownloadManager():
         self.progress.completed = True
 
         return True
-
 
     def handle_dependencies(self):
         dependencies_json, version = self.api_handler.get_dependenices_list(self.depot_version)
@@ -330,9 +347,10 @@ class DownloadManager():
             for depot in self.meta['product']['depots']:
                 if 'redist' in depot:
                     old_iterator.append(depot)
-        
+
         iterator = self.meta['dependencies'] if self.depot_version == 2 else old_iterator
-        dependencies_depots = dependencies_json['depots'] if self.depot_version == 2 else dependencies_json['product']['depots']
+        dependencies_depots = dependencies_json['depots'] if self.depot_version == 2 else dependencies_json['product'][
+            'depots']
         for dependency in dependencies_depots:
             for game_dep in iterator:
                 if self.depot_version == 2:
@@ -340,11 +358,11 @@ class DownloadManager():
                         dependencies_array.append(dependency)
                 else:
                     if game_dep['redist'] in dependency['gameIDs']:
-                        #TODO: investigate issue https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/issues/1018
+                        # TODO: investigate issue https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/issues/1018
                         if game_dep.get('targetDir'):
                             dependency['path'] = game_dep['targetDir']
                         else:
-                            dependency['path'] = os.path.join("__redist",game_dep['redist'])
+                            dependency['path'] = os.path.join("__redist", game_dep['redist'])
                         dependency['redist'] = game_dep['redist']
                         dependencies_array.append(dependency)
         return dependencies_array, version
@@ -374,18 +392,18 @@ class DownloadManager():
         for file in files:
             if type(file) == objects.DepotFile and self.depot_version == 2:
                 for chunk in file.chunks:
-                    download_size+=int(chunk['compressedSize'])
-                    disk_size+=int(chunk['size'])
+                    download_size += int(chunk['compressedSize'])
+                    disk_size += int(chunk['size'])
             elif self.depot_version == 1:
                 if file.get('size'):
-                    disk_size+=int(file['size'])
+                    disk_size += int(file['size'])
         for dependency in dependencies:
             if self.depot_version == 2:
                 for chunk in dependency.chunks:
-                    download_size+=int(chunk['compressedSize'])
-                    disk_size+=int(chunk['size'])
+                    download_size += int(chunk['compressedSize'])
+                    disk_size += int(chunk['size'])
             elif self.depot_version == 1:
-                disk_size+=int(dependency['size'])
+                disk_size += int(dependency['size'])
         if self.depot_version == 1:
             download_size = disk_size
         return (download_size, disk_size)
