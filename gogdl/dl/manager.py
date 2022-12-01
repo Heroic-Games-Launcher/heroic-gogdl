@@ -339,11 +339,12 @@ class DownloadManager:
     def handle_dependencies(self):
         dependencies_json, version = self.api_handler.get_dependenices_list(self.depot_version)
         dependencies_array = []
-        if self.depot_version == 2 and not 'dependencies' in self.meta:
+        if self.depot_version == 2 and 'dependencies' not in self.meta:
             return [], None
         old_iterator = []
         if self.depot_version == 1:
-            old_iterator.extend(self.meta['product']['gameIDs'][0]['dependencies'])
+            if 'dependencies' in self.meta['product']['gameIDs'][0]:
+                old_iterator.extend(self.meta['product']['gameIDs'][0]['dependencies'])
             for depot in self.meta['product']['depots']:
                 if 'redist' in depot:
                     old_iterator.append(depot)
