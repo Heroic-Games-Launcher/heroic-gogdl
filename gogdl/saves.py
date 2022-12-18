@@ -78,7 +78,8 @@ class CloudStorageManager:
                 files.append(abs_path)
         return files
 
-    def get_relative_path(self, root: str, path: str) -> str:
+    @staticmethod
+    def get_relative_path(root: str, path: str) -> str:
         if not root.endswith("/") and not root.endswith("\\"):
             root = root + os.sep
         return path.replace(root, "")
@@ -130,7 +131,6 @@ class CloudStorageManager:
         classifier = SyncClassifier.classify(local_files, cloud_files, timestamp)
 
         action = classifier.get_action()
-        # print(action)
 
         if prefered_action:
             if prefered_action == "forceupload":
@@ -150,15 +150,21 @@ class CloudStorageManager:
                 print(self.arguments.timestamp)
                 return
 
-        # return
         if action == SyncAction.UPLOAD:
             self.logger.info("Uploading files")
             for f in classifier.updated_local:
                 self.upload_file(f)
+            for f in classifier.not_existing_locally:
+                self.logger.info(f"DELETING IN CLOUD {f}")
+                self.delete_file(f)
         elif action == SyncAction.DOWNLOAD:
             self.logger.info("Downloading files")
             for f in classifier.updated_cloud:
                 self.download_file(f)
+            for f in classifier.not_existing_remotely:
+                self.logger.info(f"DELETING LOCALLY {f.absolute_path}")
+                os.remove(f.absolute_path)
+
         elif action == SyncAction.CONFLICT:
             self.logger.warning(
                 "Files in conflict force downloading or uploading of files"
@@ -286,7 +292,7 @@ class CloudStorageManager:
             #     f.write(response.content)
             total = int(total)
             for data in response.iter_content(
-                chunk_size=max(int(total / 1000), 1024 * 1024)
+                    chunk_size=max(int(total / 1000), 1024 * 1024)
             ):
                 f.write(data)
 
@@ -310,6 +316,9 @@ class SyncClassifier:
         self.updated_local = list()
         self.updated_cloud = list()
 
+        self.not_existing_locally = list()
+        self.not_existing_remotely = list()
+
     def get_action(self):
         if len(self.updated_local) == 0 and len(self.updated_cloud) > 0:
             self.action = SyncAction.DOWNLOAD
@@ -329,13 +338,18 @@ class SyncClassifier:
     def classify(cls, local, cloud, timestamp):
         classifier = cls()
 
-        for f in local:
+        local_paths = [f.relative_path for f in local]
+        cloud_paths = [f.relative_path for f in cloud]
 
+        for f in local:
+            if f.relative_path not in cloud_paths:
+                classifier.not_existing_remotely.append(f)
             if f.update_ts > timestamp:
                 classifier.updated_local.append(f)
 
         for f in cloud:
-
+            if f.relative_path not in local_paths:
+                classifier.not_existing_locally.append(f)
             if f.update_ts > timestamp:
                 classifier.updated_cloud.append(f)
 
