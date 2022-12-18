@@ -223,7 +223,8 @@ class DLWorkerV1:
         else:
             item_path = item_path.replace("\\", os.sep)
 
-        if self.data.get("support") == True:
+
+        if self.data.get("support"):
             item_path = os.path.join(self.path, "support", self.data["path"])
         if self.verify_file(item_path):
             self.completed = True
@@ -234,6 +235,10 @@ class DLWorkerV1:
             if os.path.exists(item_path):
                 os.remove(item_path)
         dl_utils.prepare_location(dl_utils.parent_dir(item_path), self.logger)
+
+        if self.data.get("size") == 0:
+            open(item_path, 'x').close()
+            return
         self.get_file(item_path)
 
     def get_file(self, item_path):
