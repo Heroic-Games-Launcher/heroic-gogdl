@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import gogdl.args as args
 from gogdl.dl.managers import manager
+from gogdl.dl.managers import dependencies
 import gogdl.api as api
 import gogdl.imports as imports
 import gogdl.launch as launch
@@ -26,20 +27,28 @@ def main():
     if not arguments.command:
         print("No command provided!")
         return
-    authorization_manager = auth.AuthorizationManager(arguments.auth_config_path)
-    api_handler = api.ApiHandler(authorization_manager)
-    download_manager = manager.DownloadManager(api_handler)
-    clouds_storage_manager = saves.CloudStorageManager(api_handler, authorization_manager)
-    switcher = {
-        "download": download_manager.download,
-        "repair": download_manager.download,
-        "update": download_manager.download,
-        "import": imports.get_info,
-        "info": download_manager.calculate_download_size,
-        "launch": launch.launch,
-        "save-sync": clouds_storage_manager.sync,
-        "save-clear": clouds_storage_manager.clear,
-        "auth": authorization_manager.handle_cli
+    api_handler = api.ApiHandler(
+        arguments.token.strip('"') if arguments.token else None
+    )
+    clouds_storage_manager = saves.CloudStorageManager(api_handler)
+
+    if arguments.command in ["download", "repair", "update", "info"]:
+        download_manager = manager.DownloadManager(api_handler)
+        switcher = {
+            "download": download_manager.download,
+            "repair": download_manager.download,
+            "update": download_manager.download,
+            "info": download_manager.calculate_download_size,
+        }
+    elif arguments.command in ["redist", "dependencies"]:
+        dependencies_handler = dependencies.DependenciesManager(arguments, unknown_args, api_handler)
+        dependencies_handler.get()
+    else:
+        switcher = {
+            "import": imports.get_info,
+            "launch": launch.launch,
+            "save-sync": clouds_storage_manager.sync,
+            "save-clear": clouds_storage_manager.clear,
     }
 
     function = switcher.get(arguments.command)

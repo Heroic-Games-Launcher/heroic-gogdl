@@ -5,7 +5,7 @@ from gogdl.dl.workers.v2 import DLWorker
 from gogdl.dl.progressbar import ProgressBar
 from gogdl.dl import dl_utils
 from gogdl import constants
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import os
 import logging
 
@@ -35,7 +35,7 @@ class Manager:
     def get_download_size(self):
         self.get_meta()
         dlcs = self.get_dlcs_user_owns(True)
-        self.manifest = v2.Manifest(self.meta, self.lang, dlcs, self.api_handler)
+        self.manifest = v2.Manifest(self.meta, self.lang, dlcs, self.api_handler, False)
 
         download_size, disk_size = self.manifest.calculate_download_size()
 
@@ -46,6 +46,7 @@ class Manager:
             "buildId": self.build["build_id"],
             "languages": self.manifest.list_languages(),
             "folder_name": self.meta["installDirectory"],
+            "dependencies": self.manifest.dependencies_ids,
             "versionEtag": self.version_etag,
             "versionName": self.version_name,
         }
@@ -85,7 +86,7 @@ class Manager:
             )
         workers = list()
         threads = list()
-        thread_pool = ThreadPoolExecutor(self.arguments.workers_count)
+        thread_pool = ProcessPoolExecutor(self.arguments.workers_count)
 
         for file in diff.deleted:
             file_path = os.path.join(self.path, file.path)
@@ -121,7 +122,9 @@ class Manager:
         if self.arguments.command != "repair" and self.arguments.command != "update":
             self.path = os.path.join(self.path, self.meta["installDirectory"])
 
-    def get_dlcs_user_owns(self, info_command=False, requested_dlcs=list()):
+    def get_dlcs_user_owns(self, info_command=False, requested_dlcs=None):
+        if requested_dlcs is None:
+            requested_dlcs = list()
         if not self.dlcs_should_be_downloaded and not info_command:
             return []
         self.logger.debug("Getting dlcs user owns")
@@ -129,15 +132,15 @@ class Manager:
         if len(requested_dlcs) > 0:
             for product in self.meta["products"]:
                 if (
-                    product["productId"] != self.game_id
-                    and product["productId"] in requested_dlcs
-                    and self.api_handler.does_user_own(product["productId"])
+                        product["productId"] != self.game_id
+                        and product["productId"] in requested_dlcs
+                        and self.api_handler.does_user_own(product["productId"])
                 ):
                     dlcs.append({"title": product["name"], "id": product["productId"]})
             return dlcs
         for product in self.meta["products"]:
             if product["productId"] != self.game_id and self.api_handler.does_user_own(
-                product["productId"]
+                    product["productId"]
             ):
                 dlcs.append({"title": product["name"], "id": product["productId"]})
         return dlcs
