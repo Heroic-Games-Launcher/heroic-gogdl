@@ -48,7 +48,7 @@ class ApiHandler:
         if response.ok:
             return response.json()
 
-    def get_dependenices_list(self, depot_version=2):
+    def get_dependencies_list(self, depot_version=2):
         self.logger.info("Getting Dependencies repository")
         url = constants.DEPENDENCIES_URL if depot_version == 2 else constants.DEPENDENCIES_V1_URL
         response = self.session.get(url)

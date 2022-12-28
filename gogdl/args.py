@@ -1,6 +1,5 @@
 # Initialize argparse module and return arguments
 import argparse
-import sys
 from multiprocessing import cpu_count
 
 
@@ -22,11 +21,40 @@ def init_parser():
 
     subparsers = parser.add_subparsers(dest="command")
 
+    import_parser = subparsers.add_parser(
+        "import", help="Show data about game in the specified path"
+    )
+    import_parser.add_argument("path")
+    import_parser.add_argument(
+        "--token", "-t", dest="token", help="Provide access_token"
+    )
+
+    # REDIST DOWNLOAD
+
+    redist_download_parser = subparsers.add_parser("redist", aliases=["dependencies"],
+                                                   help="Download specified dependencies to provided location")
+
+    redist_download_parser.add_argument("--token", "-t", help="Access token", required=True)
+    redist_download_parser.add_argument("--ids", help="Coma separated ids", required=True)
+    redist_download_parser.add_argument("--path", help="Location where to download the files", required=True)
+    redist_download_parser.add_argument("--version", choices=["1", "2"], help="Provide a depot version")
+    redist_download_parser.add_argument(
+        "--max-workers",
+        dest="workers_count",
+        default=cpu_count(),
+        help="Specify number of worker threads, by default number of CPU threads",
+    )
+
+
+    # AUTH
+
     auth_parser = subparsers.add_parser("auth", help="Manage authorization")
     auth_parser.add_argument("--client-id", dest="client_id")
     auth_parser.add_argument("--client-secret", dest="client_secret")
     auth_parser.add_argument("--code", dest="authorization_code",
                              help="Pass authorization code (use for login), when passed client-id and secret are ignored")
+
+    # DOWNLOAD
 
     download_parser = subparsers.add_parser(
         "download", aliases=["repair", "update"], help="Download/update/repair game"
@@ -47,45 +75,30 @@ def init_parser():
         choices=["windows", "osx", "linux"],
     )
     download_parser.add_argument(
-        "--with-dlcs", dest="dlcs", action="store_true", help="Should download dlcs"
+        "--with-dlcs", dest="dlcs", action="store_true", help="Should download all dlcs"
     )
     download_parser.add_argument(
-        "--skip-dlcs", dest="dlcs", action="store_false", help="Should skip dlcs"
+        "--skip-dlcs", dest="dlcs", action="store_false", help="Should skip all dlcs"
+    )
+    download_parser.add_argument(
+        "--dlcs",
+        dest="dlcs_list",
+        nargs="+",
+        default=[],
+        help="List of dlc ids to download (separated by space)",
+    )
+    download_parser.add_argument(
+        "--dlc-only", dest="dlc_only", action="store_true", help="Download only DLC"
     )
     download_parser.add_argument(
         "--max-workers",
         dest="workers_count",
-        default=0,
+        default=cpu_count(),
         help="Specify number of worker threads, by default number of CPU threads",
     )
 
-    import_parser = subparsers.add_parser(
-        "import", help="Show data about game in the specified path"
-    )
-    import_parser.add_argument("path")
-
-    calculate_size_parser = subparsers.add_parser(
-        "info", help="Calculates estimated download size and list of DLCs"
-    )
-    calculate_size_parser.add_argument("id")
-    calculate_size_parser.add_argument(
-        "--platform",
-        "--os",
-        dest="platform",
-        help="Target opearting system",
-        choices=["windows", "osx", "linux"],
-    )
-    calculate_size_parser.add_argument(
-        "--build", "-b", dest="build", help="Specify buildId"
-    )
-    calculate_size_parser.add_argument("--lang", "-l", help="Specify game language")
-    calculate_size_parser.add_argument(
-        "--max-workers",
-        dest="workers_count",
-        default=0,
-        help="Specify number of worker threads, by default number of CPU threads",
-    )
-
+    # LAUNCH
+    
     launch_parser = subparsers.add_parser(
         "launch", help="Launch the game in specified path", add_help=False
     )
@@ -109,6 +122,11 @@ def init_parser():
     launch_parser.add_argument(
         "--override-exe", dest="override_exe", help="Override executable to be run"
     )
+    launch_parser.add_argument(
+        "--token", "-t", dest="token", help="Provide access_token", required=False
+    )
+
+    # SAVES
 
     save_parser = subparsers.add_parser("save-sync", help="Sync game saves")
     save_parser.add_argument("path", help="Path to sync files")
@@ -145,6 +163,8 @@ def init_parser():
         required=True,
     )
 
+    # SAVES CLEAR
+
     clear_parser = subparsers.add_parser("save-clear", help="Clear cloud game saves")
     clear_parser.add_argument("path", help="Path to sync files")
     clear_parser.add_argument("id", help="Game id")
@@ -158,5 +178,6 @@ def init_parser():
         choices=["windows", "osx", "linux"],
         required=True,
     )
+
 
     return parser.parse_known_args()

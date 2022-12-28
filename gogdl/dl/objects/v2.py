@@ -53,6 +53,8 @@ class Manifest:
         self.dlc_only = dlc_only
         self.depots = self.parse_depots(language, meta["depots"])
         self.dependencies_ids = meta.get("dependencies")
+        if not self.dependencies_ids:
+            self.dependencies_ids = list()
         self.install_directory = meta["installDirectory"]
 
         self.api_handler = api_handler
@@ -62,7 +64,7 @@ class Manifest:
 
     @classmethod
     def from_json(cls, meta, api_handler):
-        manifest = cls(meta, meta["HGLInstallLanguage"], meta["HGLdlcs"], api_handler)
+        manifest = cls(meta, meta["HGLInstallLanguage"], meta["HGLdlcs"], api_handler, False)
         return manifest
 
     def serialize_to_json(self):
@@ -77,7 +79,7 @@ class Manifest:
             ):
                 parsed.append(Depot(language, depot))
 
-        return filter(lambda x: x.check_language(), parsed)
+        return list(filter(lambda x: x.check_language(), parsed))
 
     def list_languages(self):
         languages_dict = dict()

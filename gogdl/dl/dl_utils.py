@@ -81,15 +81,13 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
     return endpoint
 
 
-def get_dependency_link(api_handler, path):
+def get_dependency_link(api_handler):
     data = get_json(
         api_handler,
-        f"{constants.GOG_CONTENT_SYSTEM}/open_link?generation=2&_version=2&path=/dependencies/store/"
-        + path,
+        f"{constants.GOG_CONTENT_SYSTEM}/open_link?generation=2&_version=2&path=/dependencies/store/",
     )
     endpoint = classify_cdns(data["urls"])
-    url = endpoint["url"]
-    return url
+    return endpoint
 
 
 def merge_url_with_params(url, parameters):
