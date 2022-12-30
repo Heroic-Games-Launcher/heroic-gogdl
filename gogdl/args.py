@@ -83,14 +83,58 @@ def init_parser():
     download_parser.add_argument(
         "--dlcs",
         dest="dlcs_list",
-        nargs="+",
         default=[],
-        help="List of dlc ids to download (separated by space)",
+        help="List of dlc ids to download (separated by coma)",
     )
     download_parser.add_argument(
         "--dlc-only", dest="dlc_only", action="store_true", help="Download only DLC"
     )
     download_parser.add_argument(
+        "--max-workers",
+        dest="workers_count",
+        default=cpu_count(),
+        help="Specify number of worker threads, by default number of CPU threads",
+    )
+
+    # SIZE CALCULATING, AND OTHER MANIFEST INFO
+
+    calculate_size_parser = subparsers.add_parser(
+        "info", help="Calculates estimated download size and list of DLCs"
+    )
+
+    calculate_size_parser.add_argument(
+        "--with-dlcs",
+        dest="dlcs",
+        action="store_true",
+        help="Should download all dlcs",
+    )
+    calculate_size_parser.add_argument(
+        "--skip-dlcs", dest="dlcs", action="store_false", help="Should skip all dlcs"
+    )
+    calculate_size_parser.add_argument(
+        "--dlcs",
+        dest="dlcs_list",
+        help="Coma separated list of dlc ids to download",
+    )
+    calculate_size_parser.add_argument(
+        "--dlc-only", dest="dlc_only", action="store_true", help="Download only DLC"
+    )
+    calculate_size_parser.add_argument("id")
+    calculate_size_parser.add_argument(
+        "--platform",
+        "--os",
+        dest="platform",
+        help="Target opearting system",
+        choices=["windows", "osx", "linux"],
+    )
+    calculate_size_parser.add_argument(
+        "--build", "-b", dest="build", help="Specify buildId"
+    )
+    calculate_size_parser.add_argument(
+        "--token", "-t", dest="token", help="Provide access_token", required=True
+    )
+    calculate_size_parser.add_argument("--lang", "-l", help="Specify game language")
+    calculate_size_parser.add_argument(
         "--max-workers",
         dest="workers_count",
         default=cpu_count(),

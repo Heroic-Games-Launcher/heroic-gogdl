@@ -1,5 +1,7 @@
 # Handle newer depots download
 # This was introduced in GOG Galaxy 2.0, it features compression and files split by chunks
+import sys
+import signal
 import gogdl.dl.objects.v2 as v2
 from gogdl.dl.workers.v2 import DLWorker
 from gogdl.dl.progressbar import ProgressBar
@@ -21,6 +23,7 @@ class Manager:
             self.path = ""
 
         self.api_handler = generic_manager.api_handler
+        self.should_append_folder_name = generic_manager.should_append_folder_name
 
         self.build = generic_manager.target_build
         self.version_name = self.build["version_name"]
@@ -105,8 +108,17 @@ class Manager:
             )
             workers.append(worker)  # Register workers
 
+        # TODO: Support diff.updated patching
+
         for worker in workers:
             threads.append(thread_pool.submit(worker.work))  # Begin execution
+
+        def shut(sig, code):
+            thread_pool.shutdown(wait=True, cancel_futures=True)
+            sys.exit()
+
+        signal.signal(signal.SIGINT, shut)
+        signal.signal(signal.SIGTERM, shut)
 
         for thread in as_completed(threads):
             if thread.cancelled():
@@ -119,7 +131,7 @@ class Manager:
         self.version_etag = headers.get("Etag")
 
         # Append folder name when downloading
-        if self.arguments.command != "repair" and self.arguments.command != "update":
+        if self.should_append_folder_name:
             self.path = os.path.join(self.path, self.meta["installDirectory"])
 
     def get_dlcs_user_owns(self, info_command=False, requested_dlcs=None):

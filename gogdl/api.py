@@ -6,6 +6,8 @@ from multiprocessing import cpu_count
 from gogdl.dl import dl_utils
 from gogdl import version
 import gogdl.constants as constants
+from gogdl import version
+
 
 
 class ApiHandler:
@@ -27,7 +29,9 @@ class ApiHandler:
         self.endpoints = dict()  # Map of secure link endpoints
         self.working_on_ids = list()  # List of products we are waiting for to complete getting the secure link
 
-    def get_item_data(self, id, expanded=[]):
+    def get_item_data(self, id, expanded=None):
+        if expanded is None:
+            expanded = []
         self.logger.info(f"Getting info from products endpoint for id: {id}")
         url = f'{constants.GOG_API}/products/{id}'
         expanded_arg = '?expand='
