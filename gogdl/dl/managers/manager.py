@@ -1,5 +1,4 @@
 from multiprocessing import cpu_count
-import requests
 import logging
 import json
 
@@ -14,6 +13,7 @@ class Manager:
         self.api_handler = api_handler
 
         self.platform = arguments.platform
+        self.should_append_folder_name = self.arguments.command != "install"
         self.game_id = arguments.id
         if "workers_count" in arguments:
             self.allowed_threads = arguments.workers_count
@@ -22,13 +22,20 @@ class Manager:
 
         self.logger = logging.getLogger("GENERIC DOWNLOAD_MANAGER")
 
+        self.download_manager = None
+        self.builds = None
+        self.target_build = None
+
     def get_builds(self):
+        build_platform = self.platform
+        if self.platform == 'linux':
+            build_platform = 'windows'
         response = self.api_handler.session.get(
-            f"{constants.GOG_CONTENT_SYSTEM}/products/{self.game_id}/os/{self.platform}/builds?generation=2"
+            f"{constants.GOG_CONTENT_SYSTEM}/products/{self.game_id}/os/{build_platform}/builds?generation=2"
         )
 
         if not response.ok:
-            raise Exception("Platfom unsupported")
+            raise Exception("Platform unsupported")
 
         return response.json()
 
@@ -45,19 +52,24 @@ class Manager:
         self.download_manager.download()
 
     def setup_download_manager(self):
+
         if self.platform == "linux":
             self.logger.info(
                 "Platform is Linux, redirecting download to Linux Native manager"
             )
+
+            self.download_manager = linux.Manager(self)
+
             return
 
         self.builds = self.get_builds()
 
         self.target_build = self.builds["items"][0]
+
         if self.arguments.build:
             # Find build
             for build in self.builds["items"]:
-                if build["build_id"] == args.build:
+                if build["build_id"] == self.arguments.build:
                     self.target_build = build
                     break
 

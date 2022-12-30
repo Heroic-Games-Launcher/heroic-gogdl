@@ -12,7 +12,7 @@ TIMEOUT = 10
 
 
 def get_json(api_handler, url):
-    x = api_handler.session.get(url)
+    x = api_handler.session.get(url, headers={"Accept": "application/json"})
     if not x.ok:
         return
     return x.json()
