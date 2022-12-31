@@ -62,10 +62,13 @@ class DownloadManager:
                     if ((lang != "*") and (lang != "Neutral")) and not (lang in languages):
                         languages.append(lang)
 
+            build_id = self.builds["items"][0]["build_id"] if self.depot_version == 2 else self.meta["product"][
+                "timestamp"]
+
             print(json.dumps({"download_size": download_size,
                               "disk_size": disk_size,
                               "dlcs": dlcs,
-                              "buildId": self.builds['items'][0]["build_id"],
+                              "buildId": build_id,
                               "languages": languages,
                               "folder_name": self.meta["installDirectory"] if self.depot_version == 2 else
                               self.meta['product']['installDirectory'],
