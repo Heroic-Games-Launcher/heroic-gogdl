@@ -208,6 +208,14 @@ class DownloadManager:
                 repo = dl_utils.get_json(self.api_handler, url)
                 if depot['path'][0] == '/' and len(depot['path']) > 1:
                     depot['path'] = depot['path'][1:]
+
+                cdn_json = dl_utils.get_json(self.api_handler,
+                                             f"{constants.GOG_CONTENT_SYSTEM}/open_link?_version=2&generation=1&path=redists/{depot['redist']}/{self.redist_version}")
+                cdn = dl_utils.classify_cdns(cdn_json['urls'], 1)
+                if 'url' not in cdn:
+                    self.logger.info(
+                        f"Couldn't get cdn url for dependency {depot['redist']}/{self.redist_version}")
+                    break
                 for redist_file in range(len(repo['depot']['files'])):
                     # This makes path absolute, and appends download link to depot object
                     if repo['depot']['files'][redist_file]['path'][0] == '/':
@@ -216,15 +224,7 @@ class DownloadManager:
                     repo['depot']['files'][redist_file]['path'] = os.path.join(depot['path'],
                                                                                repo['depot']['files'][redist_file][
                                                                                    'path'])
-                    redistributable_id, file_name = repo['depot']['files'][redist_file]['url'].split('/')
 
-                    cdn_json = dl_utils.get_json(self.api_handler,
-                                                 f"{constants.GOG_CONTENT_SYSTEM}/open_link?_version=2&generation=1&path=redists/{redistributable_id}/{self.redist_version}")
-                    cdn = dl_utils.classify_cdns(cdn_json['urls'], 1)
-                    if 'url' not in cdn:
-                        self.logger.info(
-                            f"Couldn't get cdn url for dependency {redistributable_id}/{self.redist_version}")
-                        break
                     repo['depot']['files'][redist_file]['link'] = cdn['url'] + '/main.bin'
 
                 dependency_files.extend(repo['depot']['files'])
@@ -407,7 +407,8 @@ class DownloadManager:
                     download_size += int(chunk['compressedSize'])
                     disk_size += int(chunk['size'])
             elif self.depot_version == 1:
-                disk_size += int(dependency['size'])
+                if not dependency.get('directory'):
+                    disk_size += int(dependency['size'])
         if self.depot_version == 1:
             download_size = disk_size
         return (download_size, disk_size)

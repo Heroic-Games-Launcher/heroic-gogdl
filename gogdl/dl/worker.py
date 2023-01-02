@@ -77,9 +77,9 @@ class DLWorker:
             self.decompress_file(item_path + f".tmp{index}", item_path)
 
         if (
-            self.data.flags
-            and ("executable" in self.data.flags)
-            and os_platform != "win32"
+                self.data.flags
+                and ("executable" in self.data.flags)
+                and os_platform != "win32"
         ):
             file_stats = os.stat(item_path)
             permissions = file_stats.st_mode | stat.S_IEXEC
@@ -114,26 +114,16 @@ class DLWorker:
             file.close()
             os.remove(compressed)
         else:
-            if self.is_dependency:
-                url = dl_utils.get_dependency_link(
-                    self.api_handler, dl_utils.galaxy_path(compressed_md5)
-                )
-            else:
-                url = dl_utils.get_secure_link(
-                    self.api_handler, dl_utils.galaxy_path(compressed_md5), self.gameId
-                )
-            dl_utils.prepare_location(dl_utils.parent_dir(compressed), self.logger)
-            self.get_file(url, compressed, compressed_md5, md5, index)
-            return self.decompress_file(compressed, decompressed)
+            raise Exception("Unable to decompress file, it doesn't exist")
 
     def get_file(self, url, path, compressed_sum, decompressed_sum, index=0):
         isExisting = os.path.exists(path)
         if isExisting:
             if (
-                dl_utils.calculate_sum(
-                    path, hashlib.md5, self.progress.update_bytes_read
-                )
-                != compressed_sum
+                    dl_utils.calculate_sum(
+                        path, hashlib.md5, self.progress.update_bytes_read
+                    )
+                    != compressed_sum
             ):
                 os.remove(path)
             else:
@@ -150,7 +140,7 @@ class DLWorker:
             else:
                 total = int(total)
                 for data in response.iter_content(
-                    chunk_size=max(int(total / 1000), 1024 * 1024)
+                        chunk_size=max(int(total / 1000), 1024 * 1024)
                 ):
                     self.progress.update_download_speed(len(data))
                     written = f.write(data)
@@ -158,10 +148,10 @@ class DLWorker:
             f.close()
             isExisting = os.path.exists(path)
             if isExisting and (
-                dl_utils.calculate_sum(
-                    path, hashlib.md5, self.progress.update_bytes_read
-                )
-                != compressed_sum
+                    dl_utils.calculate_sum(
+                        path, hashlib.md5, self.progress.update_bytes_read
+                    )
+                    != compressed_sum
             ):
                 self.logger.warning(
                     f"Checksums dismatch for compressed chunk of {path}"
@@ -223,9 +213,15 @@ class DLWorkerV1:
         else:
             item_path = item_path.replace("\\", os.sep)
 
-
         if self.data.get("support"):
             item_path = os.path.join(self.path, "support", self.data["path"])
+        if self.data.get("directory"):
+            os.makedirs(self.data["path"], exist_ok=True)
+            return
+        if self.data.get("size") == 0:
+            dl_utils.prepare_location(dl_utils.parent_dir(item_path), self.logger)
+            open(item_path, 'x').close()
+            return
         if self.verify_file(item_path):
             self.completed = True
             if not is_dependency:
@@ -236,9 +232,6 @@ class DLWorkerV1:
                 os.remove(item_path)
         dl_utils.prepare_location(dl_utils.parent_dir(item_path), self.logger)
 
-        if self.data.get("size") == 0:
-            open(item_path, 'x').close()
-            return
         self.get_file(item_path)
 
     def get_file(self, item_path):
@@ -258,7 +251,7 @@ class DLWorkerV1:
             else:
                 total = int(total)
                 for data in response.iter_content(
-                    chunk_size=max(int(total / 1000), 1024 * 1024)
+                        chunk_size=max(int(total / 1000), 1024 * 1024)
                 ):
                     self.progress.update_download_speed(len(data))
                     written = f.write(data)
