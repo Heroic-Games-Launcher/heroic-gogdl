@@ -85,7 +85,7 @@ def init_parser():
     )
 
     launch_parser = subparsers.add_parser(
-        "launch", help="Launch the game in specified path"
+        "launch", help="Launch the game in specified path", add_help=False
     )
     launch_parser.add_argument("path")
     launch_parser.add_argument("id")
