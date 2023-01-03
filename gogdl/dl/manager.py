@@ -328,7 +328,7 @@ class DownloadManager:
             # worker.do_stuff(False)
 
         for download_file in dependency_files:
-            worker = DLWorkerV1(download_file, self.dl_path, download_file['link'], self.api_handler,
+            worker = DLWorkerV1(download_file, self.dl_path, download_file.get('link'), self.api_handler,
                                 self.dl_target['id'], self.progress)
             thread = self.thpool.submit(worker.do_stuff, True)
             self.threads.append(thread)
