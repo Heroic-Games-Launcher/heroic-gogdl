@@ -216,7 +216,7 @@ class DLWorkerV1:
         if self.data.get("support"):
             item_path = os.path.join(self.path, "support", self.data["path"])
         if self.data.get("directory"):
-            os.makedirs(self.data["path"], exist_ok=True)
+            os.makedirs(item_path, exist_ok=True)
             return
         if self.data.get("size") == 0:
             dl_utils.prepare_location(dl_utils.parent_dir(item_path), self.logger)
