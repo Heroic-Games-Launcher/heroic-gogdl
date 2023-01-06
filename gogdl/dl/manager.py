@@ -178,7 +178,7 @@ class DownloadManager:
                         if self.api_handler.does_user_own(dlc['gameID']):
                             owned_dlcs.append(dlc['gameID'])
             for depot in self.meta['product']['depots']:
-                if not 'redist' in depot:
+                if 'redist' not in depot:
                     depot_object = objects.DepotV1(self.lang, depot)
                     if depot_object.check_language():
                         collected_depots.append(depot_object)

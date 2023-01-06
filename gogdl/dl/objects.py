@@ -47,6 +47,8 @@ class DepotV1:
         status = True
         for lang in self.languages:
             status = lang == "Neutral" or lang == self.target_lang
+            if status:
+                break
         return status
 
 
