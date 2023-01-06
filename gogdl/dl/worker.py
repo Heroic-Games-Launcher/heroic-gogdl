@@ -28,7 +28,7 @@ class DLWorker:
             self.data.path = self.data.path.replace("/", "\\")
         else:
             self.data.path = self.data.path.replace("\\", os.sep)
-        item_path = os.path.join(self.path, self.data.path)
+        item_path = os.path.join(self.path, self.data.path.lstrip("/\\"))
         if type(self.data) == DepotDirectory:
             dl_utils.prepare_location(item_path)
             return
