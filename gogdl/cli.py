@@ -32,8 +32,9 @@ def main():
     )
     clouds_storage_manager = saves.CloudStorageManager(api_handler)
 
+    switcher = {}
     if arguments.command in ["download", "repair", "update", "info"]:
-        download_manager = manager.DownloadManager(api_handler)
+        download_manager = manager.Manager(arguments, unknown_args, api_handler)
         switcher = {
             "download": download_manager.download,
             "repair": download_manager.download,
