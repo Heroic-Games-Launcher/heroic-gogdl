@@ -263,11 +263,19 @@ class CloudStorageManager:
             )
             return
 
-    def download_file(self, file: SyncFile):
-        response = self.session.get(
-            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{file.relative_path}",
-            stream=True,
-        )
+    def download_file(self, file: SyncFile, retries=3):
+        try:
+            response = self.session.get(
+                f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{file.relative_path}",
+                stream=True,
+            )
+        except:
+            if (retries > 1):
+                self.logger.debug(f"Failed sync of {file}, retrying (retries left {retries - 1})")
+                self.download_file(file, retries - 1)
+            else:
+                response = {"ok": False}
+            return
 
         if not response.ok:
             self.logger.error("Downloading file failed")
