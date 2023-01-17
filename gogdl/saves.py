@@ -273,9 +273,9 @@ class CloudStorageManager:
             if (retries > 1):
                 self.logger.debug(f"Failed sync of {file}, retrying (retries left {retries - 1})")
                 self.download_file(file, retries - 1)
+                return
             else:
-                response = {"ok": False}
-            return
+                response = {}
 
         if not response.ok:
             self.logger.error("Downloading file failed")
