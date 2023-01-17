@@ -34,7 +34,7 @@ def init_parser():
     redist_download_parser = subparsers.add_parser("redist", aliases=["dependencies"],
                                                    help="Download specified dependencies to provided location")
 
-    redist_download_parser.add_argument("--token", "-t", help="Access token", required=True)
+    redist_download_parser.add_argument("--token", "-t", help="Access token", required=False)
     redist_download_parser.add_argument("--ids", help="Coma separated ids", required=True)
     redist_download_parser.add_argument("--path", help="Location where to download the files", required=True)
     redist_download_parser.add_argument("--version", choices=["1", "2"], help="Provide a depot version")
@@ -142,7 +142,7 @@ def init_parser():
     )
 
     # LAUNCH
-    
+
     launch_parser = subparsers.add_parser(
         "launch", help="Launch the game in specified path", add_help=False
     )

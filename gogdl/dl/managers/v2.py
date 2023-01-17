@@ -4,9 +4,8 @@ import sys
 import signal
 import gogdl.dl.objects.v2 as v2
 from gogdl.dl.workers.v2 import DLWorker
-from gogdl.dl.progressbar import ProgressBar
 from gogdl.dl import dl_utils
-from gogdl import constants
+from gogdl.dl.managers import dependencies
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import os
 import logging
@@ -75,6 +74,11 @@ class Manager:
 
         self.logger.info(diff)
 
+        dependencies_manager = dependencies.DependenciesManager(self.manifest.dependencies_ids, self.path, 2,
+                                                                self.arguments.workers_count, self.api_handler, True)
+
+
+
         secure_link_endpoints_ids = [product["id"] for product in dlcs_user_owns]
         if not self.dlc_only:
             secure_link_endpoints_ids.append(self.game_id)
@@ -88,6 +92,8 @@ class Manager:
                 }
             )
         workers = list()
+        dependency_workers = dependencies_manager.get(True)
+        workers.extend(dependency_workers)
         threads = list()
         thread_pool = ProcessPoolExecutor(self.arguments.workers_count)
 
