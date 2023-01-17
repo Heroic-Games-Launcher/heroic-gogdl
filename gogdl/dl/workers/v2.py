@@ -22,7 +22,7 @@ class DLWorker:
         self.is_dependency = False
 
     def work(self):
-        item_path = os.path.join(self.path, self.data.path)
+        item_path = os.path.join(self.path, self.data.path.lstrip("/\\"))
 
         if type(self.data) == v2.DepotDirectory:
             os.makedirs(item_path, exist_ok=True)

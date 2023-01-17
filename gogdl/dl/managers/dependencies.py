@@ -24,36 +24,41 @@ def run_process(worker):
 
 
 class DependenciesManager:
-    def __init__(self, arguments, unknown_arguments, api_handler):
-        self.arguments = arguments
-        self.unknown_arguments = unknown_arguments
+    def __init__(self, ids, path, generation, workers_count, api_handler, download_game_deps_only=False):
         self.api = api_handler
 
         self.logger = logging.getLogger("REDIST")
 
-        self.path = arguments.path
-        self.version = int(arguments.version)
-        self.workers_count = int(arguments.workers_count)
+        self.path = path
+        self.version = int(generation)
+        self.workers_count = int(workers_count)
         self.repository = self.api.get_dependencies_list(depot_version=self.version)
 
-        ids = arguments.ids
-        self.ids = ids.split(",")
+        self.ids = ids
+        self.download_game_deps_only = download_game_deps_only  # Basically skip all redist with path starting with __redist
 
-    def get(self):
+    def get(self, return_workers=False):
         if self.version == 1:
-            self.get_v1()
+            return self.get_v1(return_workers)
         elif self.version == 2:
-            self.get_v2()
+            return self.get_v2(return_workers)
 
-    def get_v1(self):
+    def get_v1(self, return_workers):
         pass
 
-    def get_v2(self):
+    def get_v2(self, return_workers):
         depots = []
+        if not self.ids:
+            return []
 
         for depot in self.repository[0]["depots"]:
             if depot["dependencyId"] in self.ids:
-                depots.append(depot)
+                should_download = depot["executable"]["path"].startswith("__redist")
+                if self.download_game_deps_only:
+                    should_download = not should_download
+
+                if should_download:
+                    depots.append(depot)
 
         files = []
 
@@ -72,6 +77,9 @@ class DependenciesManager:
             worker = v2_worker.DLWorker(file, self.path, self.api, None, secure_link)
             worker.is_dependency = True
             workers.append(worker)
+
+        if return_workers:
+            return workers
 
         pool = Pool(self.workers_count)
 
