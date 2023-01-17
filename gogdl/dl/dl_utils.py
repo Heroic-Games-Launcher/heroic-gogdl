@@ -87,15 +87,7 @@ def parent_dir(path: str):
     return path[0 : path.rindex(PATH_SEPARATOR)]
 
 
-def classify_cdns(array, generation=2):
-    cdns = list()
-    for item in array:
-        score = 0
-        endpoint_name = item["endpoint_name"]
-        # Some CDNS are failing to process a request propertly
-        # cdn = filterCdns(endpoint_name, constants.GALAXY_CDNS)
-        # if cdn:
-        cdns.append(item)
+def classify_cdns(cdns, generation=2):
     best = None
     for cdn in cdns:
         if generation not in cdn["supports_generation"]:
@@ -103,18 +95,10 @@ def classify_cdns(array, generation=2):
         if not best:
             best = cdn
         else:
-            if best["priority"] < cdn["priority"]:
+            if best["priority"] > cdn["priority"]:
                 best = cdn
 
     return best
-
-
-# def filterCdns(string,  options):
-#     for option in options:
-#         if string == option:
-#             return True
-#     return False
-
 
 def calculate_sum(path, function, read_speed_function=None):
     with open(path, "rb") as f:
