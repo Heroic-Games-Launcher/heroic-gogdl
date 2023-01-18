@@ -95,7 +95,7 @@ def classify_cdns(cdns, generation=2):
         if not best:
             best = cdn
         else:
-            if best["priority"] > cdn["priority"]:
+            if best["priority"] < cdn["priority"]:
                 best = cdn
 
     return best
