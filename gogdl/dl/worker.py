@@ -11,14 +11,13 @@ import stat
 
 
 class DLWorker:
-    def __init__(self, data, path, api_handler, gameId, progress, endpoints):
+    def __init__(self, data, path, api_handler, gameId, progress):
         self.data = data
         self.path = path
         self.api_handler = api_handler
         self.progress = progress
         self.gameId = gameId
         self.completed = False
-        self.endpoints = endpoints
         self.logger = logging.getLogger("DOWNLOAD_WORKER")
         self.downloaded_size = 0
 
@@ -60,18 +59,9 @@ class DLWorker:
             compressed_md5 = chunk["compressedMd5"]
             md5 = chunk["md5"]
             self.downloaded_size = chunk["compressedSize"]
-            if is_dependency:
-                url = dl_utils.get_dependency_link(
-                    self.api_handler, dl_utils.galaxy_path(compressed_md5)
-                )
-            else:
-                endpoint = self.endpoints[self.data.product_id]
-                parameters = copy(endpoint["parameters"])
-                parameters["path"] += "/" + dl_utils.galaxy_path(compressed_md5)
-                url = dl_utils.merge_url_with_params(endpoint["url_format"], parameters)
             download_path = os.path.join(item_path + f".tmp{index}")
             dl_utils.prepare_location(dl_utils.parent_dir(download_path), self.logger)
-            self.get_file(url, download_path, compressed_md5, md5, index)
+            self.get_file(download_path, compressed_md5, md5, index)
 
         for index in range(len(self.data.chunks)):
             self.decompress_file(item_path + f".tmp{index}", item_path)
@@ -97,6 +87,14 @@ class DLWorker:
 
         self.completed = True
 
+    def get_file_url(self, compressed_md5):
+        endpoint = self.api_handler.get_secure_link(self.data.product_id)
+        parameters = copy(endpoint["parameters"])
+        parameters["path"] += "/" + dl_utils.galaxy_path(compressed_md5)
+        url = dl_utils.merge_url_with_params(endpoint["url_format"], parameters)
+
+        return url
+
     def decompress_file(self, compressed, decompressed):
         if os.path.exists(compressed):
             file = open(compressed, "rb")
@@ -116,7 +114,13 @@ class DLWorker:
         else:
             raise Exception("Unable to decompress file, it doesn't exist")
 
-    def get_file(self, url, path, compressed_sum, decompressed_sum, index=0):
+    def get_file(self, path, compressed_sum, decompressed_sum, index=0):
+        if self.is_dependency:
+            url = dl_utils.get_dependency_link(
+                self.api_handler, dl_utils.galaxy_path(compressed_sum)
+            )
+        else:
+            url = self.get_file_url(compressed_sum)
         isExisting = os.path.exists(path)
         if isExisting:
             if (
@@ -132,6 +136,11 @@ class DLWorker:
             response = self.api_handler.session.get(
                 url, stream=True, allow_redirects=True
             )
+            if not response.ok:
+                self.api_handler.get_new_secure_link(self.data.product_id)
+                self.get_file(path, compressed_sum, decompressed_sum, index)
+
+
             total = response.headers.get("Content-Length")
             if total is None:
                 self.progress.update_download_speed(len(response.content))
@@ -158,7 +167,7 @@ class DLWorker:
                 )
                 if isExisting:
                     os.remove(path)
-                self.get_file(url, path, compressed_sum, decompressed_sum, index)
+                self.get_file(path, compressed_sum, decompressed_sum, index)
 
     def verify_file(self, item_path):
         if os.path.exists(item_path):

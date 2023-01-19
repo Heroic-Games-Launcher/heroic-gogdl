@@ -271,17 +271,17 @@ class DownloadManager:
         self.thpool = ThreadPoolExecutor(max_workers=allowed_threads)
         endpoints = dict()
 
-        endpoints[self.dl_target['id']] = dl_utils.get_secure_link(self.api_handler, '/', self.dl_target['id'])
+        self.api_handler.get_new_secure_link(self.dl_target['id'])
         for dlc_id in self.dlc_ids:
-            endpoints[dlc_id] = dl_utils.get_secure_link(self.api_handler, '/', dlc_id)
+            self.api_handler.get_new_secure_link(dlc_id)
         # Main game files
         for file in download_files:
-            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress, endpoints)
+            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress)
             # thread.do_stuff()
             self.threads.append(self.thpool.submit(thread.do_stuff))
         # Dependencies
         for file in dependency_files:
-            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress, None)
+            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress)
             self.threads.append(self.thpool.submit(thread.do_stuff, (True)))
 
         # Wait until everything finishes
