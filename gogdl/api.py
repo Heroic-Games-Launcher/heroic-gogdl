@@ -74,13 +74,18 @@ class ApiHandler:
             self.working_on_ids.append(id)
             new = self.__obtain_secure_link(id)
             self.endpoints[id] = new
+            self.working_on_ids.remove(id)
             return new
+        else:
+            while True:
+                if self.endpoints.get(id):
+                    return self.endpoints[id]
 
     def get_secure_link(self, id):
         if self.endpoints.get(id):
             return self.endpoints.get(id)
         else:
-            while True:
+            while True:  # Await for other thread to fetch the data
                 if self.endpoints.get(id):
                     return self.endpoints.get(id)
 
