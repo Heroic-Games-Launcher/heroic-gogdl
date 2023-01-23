@@ -65,14 +65,14 @@ class ApiHandler:
                 return True
         return False
 
-    def __obtain_secure_link(self, id):
+    def __obtain_secure_link(self, id, path, generation):
         self.endpoints[id] = None
-        return dl_utils.get_secure_link(self, '/', id)
+        return dl_utils.get_secure_link(self, path, id, generation)
 
-    def get_new_secure_link(self, id):
+    def get_new_secure_link(self, id, path="/", generation=2):
         if id not in self.working_on_ids:
             self.working_on_ids.append(id)
-            new = self.__obtain_secure_link(id)
+            new = self.__obtain_secure_link(id, path, generation)
             self.endpoints[id] = new
             self.working_on_ids.remove(id)
             return new
