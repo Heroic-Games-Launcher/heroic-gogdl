@@ -84,7 +84,7 @@ def merge_url_with_params(url, parameters):
 
 
 def parent_dir(path: str):
-    return path[0 : path.rindex(PATH_SEPARATOR)]
+    return path[0: path.rindex(PATH_SEPARATOR)]
 
 
 def classify_cdns(cdns, generation=2):
@@ -99,6 +99,7 @@ def classify_cdns(cdns, generation=2):
                 best = cdn
 
     return best
+
 
 def calculate_sum(path, function, read_speed_function=None):
     with open(path, "rb") as f:
@@ -115,7 +116,7 @@ def calculate_sum(path, function, read_speed_function=None):
 
 
 def get_readable_size(size):
-    power = 2**10
+    power = 2 ** 10
     n = 0
     power_labels = {0: "", 1: "K", 2: "M", 3: "G"}
     while size > power:

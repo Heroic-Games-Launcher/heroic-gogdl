@@ -271,17 +271,17 @@ class DownloadManager:
         self.thpool = ThreadPoolExecutor(max_workers=allowed_threads)
         endpoints = dict()
 
-        endpoints[self.dl_target['id']] = dl_utils.get_secure_link(self.api_handler, '/', self.dl_target['id'])
+        self.api_handler.get_new_secure_link(self.dl_target['id'])
         for dlc_id in self.dlc_ids:
-            endpoints[dlc_id] = dl_utils.get_secure_link(self.api_handler, '/', dlc_id)
+            self.api_handler.get_new_secure_link(dlc_id)
         # Main game files
         for file in download_files:
-            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress, endpoints)
+            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress)
             # thread.do_stuff()
             self.threads.append(self.thpool.submit(thread.do_stuff))
         # Dependencies
         for file in dependency_files:
-            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress, None)
+            thread = DLWorker(file, self.dl_path, self.api_handler, self.dl_target['id'], self.progress)
             self.threads.append(self.thpool.submit(thread.do_stuff, (True)))
 
         # Wait until everything finishes
@@ -300,9 +300,14 @@ class DownloadManager:
         download_files, dependency_files = self.collect_depots()
 
         dl_utils.prepare_location(self.dl_path, self.logger)
-        link = dl_utils.get_secure_link(self.api_handler,
-                                        f"/{self.platform}/{self.builds['items'][0]['legacy_build_id']}",
-                                        self.dl_target['id'], generation=1)
+
+        self.api_handler.get_new_secure_link(self.dl_target['id'],
+                                             f"/{self.platform}/{self.builds['items'][0]['legacy_build_id']}",
+                                             1)
+
+        for dlc_id in self.dlc_ids:
+            self.api_handler.get_new_secure_link(dlc_id,
+                                                 f"/{self.platform}/{self.builds['items'][0]['legacy_build_id']}", 1)
 
         size_data = self.calculate_size(download_files, [])
         download_size = size_data[0]
@@ -321,19 +326,21 @@ class DownloadManager:
         self.progress.start()
         self.threads = []
         for download_file in download_files:
-            worker = DLWorkerV1(download_file, self.dl_path, link, self.api_handler, self.dl_target['id'],
-                                self.progress)
+            worker = DLWorkerV1(download_file, self.dl_path, self.api_handler, self.dl_target['id'],
+                                self.progress, self.platform,
+                                self.builds['items'][0]['legacy_build_id'])
             thread = self.thpool.submit(worker.do_stuff, False)
             self.threads.append(thread)
             # worker.do_stuff(False)
 
         for download_file in dependency_files:
-            worker = DLWorkerV1(download_file, self.dl_path, download_file.get('link'), self.api_handler,
-                                self.dl_target['id'], self.progress)
+            worker = DLWorkerV1(download_file, self.dl_path, self.api_handler,
+                                self.dl_target['id'], self.progress, self.platform,
+                                self.builds['items'][0]['legacy_build_id'])
             thread = self.thpool.submit(worker.do_stuff, True)
             self.threads.append(thread)
 
-            # worker.do_stuff(True)
+        # worker.do_stuff(True)
 
         for thread in as_completed(self.threads):
             if thread.cancelled():
@@ -367,7 +374,6 @@ class DownloadManager:
                         dependencies_array.append(dependency)
                 else:
                     if game_dep['redist'] in dependency['gameIDs']:
-                        # TODO: investigate issue https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/issues/1018
                         if game_dep.get('targetDir'):
                             dependency['path'] = game_dep['targetDir']
                         else:
