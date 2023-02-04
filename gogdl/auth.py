@@ -36,7 +36,7 @@ class AuthorizationManager:
             f.write(json.dumps(self.credentials_data))
             f.close()
 
-    def get_credentials(self, client_id=None, client_secret=None) -> dict | None:
+    def get_credentials(self, client_id=None, client_secret=None):
         """
         Reads data from config and returns it
         :param client_id:
