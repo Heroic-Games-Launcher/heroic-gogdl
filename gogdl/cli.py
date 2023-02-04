@@ -29,7 +29,7 @@ def main():
     authorization_manager = auth.AuthorizationManager(arguments.auth_config_path)
     api_handler = api.ApiHandler(authorization_manager)
     download_manager = manager.DownloadManager(api_handler)
-    clouds_storage_manager = saves.CloudStorageManager(api_handler)
+    clouds_storage_manager = saves.CloudStorageManager(api_handler, authorization_manager)
     switcher = {
         "download": download_manager.download,
         "repair": download_manager.download,

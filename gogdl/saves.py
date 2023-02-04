@@ -49,8 +49,9 @@ class SyncFile:
 
 
 class CloudStorageManager:
-    def __init__(self, api_handler):
+    def __init__(self, api_handler, authorization_manager):
         self.api = api_handler
+        self.auth_manager = authorization_manager
         self.session = requests.Session()
         self.logger = logging.getLogger("SAVES")
 
@@ -185,9 +186,7 @@ class CloudStorageManager:
         self.logger.info("Done")
 
     def get_auth_token(self):
-        url = self._get_token_gen_url(self.client_id, self.client_secret)
-
-        self.credentials = dl_utils.get_json(self, url)
+        self.credentials = self.auth_manager.get_credentials(self.client_id, self.client_secret)
         self.session.headers.update(
             {"Authorization": f"Bearer {self.credentials['access_token']}"}
         )
@@ -300,9 +299,6 @@ class CloudStorageManager:
         )
         os.utime(file.absolute_path, (f_timestamp, f_timestamp))
 
-    def _get_token_gen_url(self, client_id: str, client_secret: str) -> str:
-        refresh_token = self.arguments.token.strip('"')
-        return f"https://auth.gog.com/token?client_id={client_id}&client_secret={client_secret}&grant_type=refresh_token&refresh_token={refresh_token}&without_new_session=1"
 
 
 class SyncClassifier:
