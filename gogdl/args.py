@@ -15,7 +15,16 @@ def init_parser():
         help="Display GOGDL version",
     )
 
+    parser.add_argument("--auth-config-path", dest="auth_config_path",
+                        help="Path to json file where tokens will be stored", required=True)
+
     subparsers = parser.add_subparsers(dest="command")
+
+    auth_parser = subparsers.add_parser("auth", help="Manage authorization")
+    auth_parser.add_argument("--client-id", dest="client_id")
+    auth_parser.add_argument("--client-secret", dest="client_secret")
+    auth_parser.add_argument("--code", dest="authorization_code",
+                             help="Pass authorization code (use for login), when passed client-id and secret are ignored")
 
     download_parser = subparsers.add_parser(
         "download", aliases=["repair", "update"], help="Download/update/repair game"

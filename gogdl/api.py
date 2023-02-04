@@ -4,20 +4,23 @@ import requests
 import json
 from multiprocessing import cpu_count
 from gogdl.dl import dl_utils
+from gogdl import version
 import gogdl.constants as constants
 
 
 class ApiHandler:
-    def __init__(self, token):
+    def __init__(self, auth_manager):
+        self.auth_manager = auth_manager
         self.logger = logging.getLogger("API")
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(pool_maxsize=cpu_count())
         self.session.mount("https://", adapter)
         self.session.headers = {
-            'User-Agent': 'GOGGalaxyClient/2.0.45.61 (GOG Galaxy)'
+            'User-Agent': f'gogdl/{version} (Heroic Games Launcher)'
         }
-        if token:
-            self.session.headers["Authorization"] = f"Bearer {token}"
+        credentials = self.auth_manager.get_credentials()
+        token = credentials["access_token"]
+        self.session.headers["Authorization"] = f"Bearer {token}"
         self.owned = []
 
         self.endpoints = dict()  # Map of secure link endpoints
@@ -67,6 +70,8 @@ class ApiHandler:
 
     def __obtain_secure_link(self, id, path, generation):
         self.endpoints[id] = None
+        if self.auth_manager.is_credential_expired():
+            self.auth_manager.refresh_credentials()
         return dl_utils.get_secure_link(self, path, id, generation)
 
     def get_new_secure_link(self, id, path="/", generation=2):
