@@ -92,9 +92,7 @@ class Manager:
 
         if not self.dlc_only:
             installer_data = dl_utils.get_json(self.api_handler, self.game_installer["files"][0]["downlink"])
-            game_install_handler = linux.InstallerHandler(installer_data["downlink"],
-                                                          self.game_installer["files"][0]["size"],
-                                                          self.api_handler.session)
+            game_install_handler = linux.InstallerHandler(installer_data["downlink"],self.api_handler.session)
             self.installer_handlers.append(game_install_handler)
 
         # Create dlc installer handlers
@@ -109,7 +107,7 @@ class Manager:
                     installer_data = dl_utils.get_json(self.api_handler, installer["files"][0]["downlink"])
 
                     install_handler = linux.InstallerHandler(installer_data["downlink"],
-                                                             installer["files"][0]["size"], self.api_handler.session)
+                                                              self.api_handler.session)
 
                     self.installer_handlers.append(install_handler)
 
@@ -128,7 +126,7 @@ class Manager:
 
         for handler in self.installer_handlers:
             for file in handler.central_directory.files:
-                if not file.file_name.startswith("data/noarch") and file.file_name.endswith("/"):
+                if not file.file_name.startswith("data/noarch") or file.file_name.endswith("/"):
                     continue
                 size += file.uncompressed_size
                 download_size += file.compressed_size
@@ -150,7 +148,6 @@ class Manager:
 
         download_size, disk_size = self.calculate_download_sizes()
 
-        # TODO: get the folder name
         response = {
             "download_size": download_size,
             "disk_size": disk_size,

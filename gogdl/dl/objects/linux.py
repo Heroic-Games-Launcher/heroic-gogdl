@@ -2,6 +2,9 @@ END_OF_CENTRAL_DIRECTORY = b"\x50\x4b\x05\x06"
 CENTRAL_DIRECTORY = b"\x50\x4b\x01\x02"
 LOCAL_FILE_HEADER = b"\x50\x4b\x03\x04"
 
+# ZIP64
+ZIP_64_END_OF_CD_LOCATOR = b"\x50\x4b\x06\x07"
+ZIP_64_END_OF_CD = b"\x50\x4b\x06\x06"
 
 class LocalFile:
     def load_data(self, handler):
@@ -109,6 +112,55 @@ class CentralDirectory:
             data = data[next_offset:]
         return central_dir
 
+class Zip64EndOfCentralDirLocator:
+    def __init__(self):
+        self.number_of_disk = None
+        self.zip64_end_of_cd_offset = None
+        self.total_number_of_disks = None
+
+    @classmethod
+    def from_bytes(cls, data):
+        zip64_end_of_cd = cls()
+        zip64_end_of_cd.number_of_disk = int.from_bytes(data[4:8], "little")
+        zip64_end_of_cd.zip64_end_of_cd_offset = int.from_bytes(data[8:16], "little")
+        zip64_end_of_cd.total_number_of_disks = int.from_bytes(data[16:20], "little")
+        return zip64_end_of_cd
+    
+    def __str__(self):
+        return f"\nZIP64EOCDLocator\nDisk Number: {self.number_of_disk}\nZ64_EOCD Offset: {self.zip64_end_of_cd_offset}\nNumber of disks: {self.total_number_of_disks}"
+
+class Zip64EndOfCentralDir:
+    def __init__(self):
+        self.size = None
+        self.version_made_by = None
+        self.version_needed = None
+        self.number_of_disk = None
+        self.central_directory_start_disk = None
+        self.number_of_entries_on_this_disk = None
+        self.number_of_entries_total = None
+        self.size_of_central_directory = None
+        self.central_directory_offset = None
+        self.extensible_data = None
+
+    @classmethod
+    def from_bytes(cls, data):
+        end_of_cd = cls()
+
+        end_of_cd.size = int.from_bytes(data[4:12], "little")
+        end_of_cd.version_made_by = data[12:14]
+        end_of_cd.version_needed = data[14:16]
+        end_of_cd.number_of_disk = data[16:20]
+        end_of_cd.central_directory_start_disk = data[20:24]
+        end_of_cd.number_of_entries_on_this_disk = int.from_bytes(data[24:32], "little")
+        end_of_cd.number_of_entries_total = int.from_bytes(data[32:40], "little")
+        end_of_cd.size_of_central_directory = int.from_bytes(data[40:48], "little")
+        end_of_cd.central_directory_offset = int.from_bytes(data[48:56], "little")
+
+        return end_of_cd
+
+    def __str__(self) -> str:
+        return f"\nZ64 EndOfCD\nSize: {self.size}\nNumber of disk: {self.number_of_disk}\nEntries on this disk: {self.number_of_entries_on_this_disk}\nEntries total: {self.number_of_entries_total}\nCD offset: {self.central_directory_offset}"
+
 
 class EndOfCentralDir:
     def __init__(self):
@@ -140,32 +192,37 @@ class EndOfCentralDir:
 
 
 class InstallerHandler:
-    def __init__(self, url, file_size, session):
+    def __init__(self, url, session):
         self.url = url
         self.session = session
-        self.file_size = file_size
+        self.file_size = None 
         beginning_of_file = self.get_bytes_from_file(
-            from_b=760000, size=300000, add_archive_index=False
+            from_b=1024*512, size=1024*512, add_archive_index=False
         )
-        self.start_of_archive_index = beginning_of_file.find(LOCAL_FILE_HEADER) + 760000
+        
+        self.start_of_archive_index = beginning_of_file.find(LOCAL_FILE_HEADER) + 1024*512
 
         # ZIP contents
-        self.end_of_cd = None
+        self.central_directory_offset = None
+        self.central_directory_records = None
+        self.size_of_central_directory = None
         self.central_directory = None
 
-    def get_bytes_from_file(self, from_b=0, size=None, add_archive_index=True, raw_response=False):
+    def get_bytes_from_file(self, from_b=-1, size=None, add_archive_index=True, raw_response=False):
         if add_archive_index:
             from_b += self.start_of_archive_index
 
-        from_b_repr = str(from_b) if from_b > 0 else ""
+        from_b_repr = str(from_b) if from_b > -1 else ""
         if size:
-            end_b = from_b + size
+            end_b = from_b + size - 1
         else:
             end_b = ""
         range_header = self.get_range_header(from_b_repr, end_b)
 
         response = self.session.get(self.url, headers={'Range': range_header},
                                     allow_redirects=True, stream=raw_response)
+        if not self.file_size:
+            self.file_size = int(response.headers.get("Content-Range").split("/")[-1])
         if raw_response:
             return response
         else:
@@ -182,18 +239,33 @@ class InstallerHandler:
 
     def __find_end_of_cd(self):
         end_of_cd_data = self.get_bytes_from_file(
-            from_b=self.file_size - 32, add_archive_index=False
+            from_b=self.file_size - 100, add_archive_index=False
         )
 
         end_of_cd_header_data_index = end_of_cd_data.find(END_OF_CENTRAL_DIRECTORY)
-        self.end_of_cd = EndOfCentralDir.from_bytes(end_of_cd_data[end_of_cd_header_data_index:])
+        zip64_end_of_cd_locator_index = end_of_cd_data.find(ZIP_64_END_OF_CD_LOCATOR)
+        end_of_cd = EndOfCentralDir.from_bytes(end_of_cd_data[end_of_cd_header_data_index:])
+        if end_of_cd.central_directory_offset == 0xFFFFFFFF:
+            # We need to find zip64 headers
+
+            zip64_end_of_cd_locator = Zip64EndOfCentralDirLocator.from_bytes(end_of_cd_data[zip64_end_of_cd_locator_index:])
+            zip64_end_of_cd_data = self.get_bytes_from_file(from_b=zip64_end_of_cd_locator.zip64_end_of_cd_offset, size=200)
+            zip64_end_of_cd = Zip64EndOfCentralDir.from_bytes(zip64_end_of_cd_data)
+
+            self.central_directory_offset = zip64_end_of_cd.central_directory_offset
+            self.size_of_central_directory = zip64_end_of_cd.size_of_central_directory
+            self.central_directory_records = zip64_end_of_cd.number_of_entries_total
+        else:
+            self.central_directory_offset = end_of_cd.central_directory_offset
+            self.size_of_central_directory = end_of_cd.size_of_central_directory
+            self.central_directory_records = end_of_cd.central_directory_records 
 
     def __find_central_directory(self):
         central_directory_data = self.get_bytes_from_file(
-            from_b=self.end_of_cd.central_directory_offset,
-            size=self.end_of_cd.size_of_central_directory,
+            from_b=self.central_directory_offset,
+            size=self.size_of_central_directory,
         )
 
         self.central_directory = CentralDirectory.from_bytes(
-            central_directory_data, self.end_of_cd.central_directory_records
+            central_directory_data, self.central_directory_records
         )
