@@ -19,8 +19,9 @@ class ApiHandler:
             'User-Agent': f'gogdl/{version} (Heroic Games Launcher)'
         }
         credentials = self.auth_manager.get_credentials()
-        token = credentials["access_token"]
-        self.session.headers["Authorization"] = f"Bearer {token}"
+        if credentials:
+            token = credentials["access_token"]
+            self.session.headers["Authorization"] = f"Bearer {token}"
         self.owned = []
 
         self.endpoints = dict()  # Map of secure link endpoints
