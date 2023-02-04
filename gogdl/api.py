@@ -71,7 +71,10 @@ class ApiHandler:
     def __obtain_secure_link(self, id, path, generation):
         self.endpoints[id] = None
         if self.auth_manager.is_credential_expired():
-            self.auth_manager.refresh_credentials()
+            if self.auth_manager.refresh_credentials():
+                credentials = self.auth_manager.get_credentials()
+                token = credentials["access_token"]
+                self.session.headers["Authorization"] = f"Bearer {token}"
         return dl_utils.get_secure_link(self, path, id, generation)
 
     def get_new_secure_link(self, id, path="/", generation=2):
