@@ -139,6 +139,7 @@ class DLWorker:
             if not response.ok:
                 self.api_handler.get_new_secure_link(self.data.product_id)
                 self.get_file(path, compressed_sum, decompressed_sum, index)
+                return
 
             total = response.headers.get("Content-Length")
             if total is None:

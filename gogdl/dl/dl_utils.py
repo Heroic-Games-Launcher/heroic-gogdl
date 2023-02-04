@@ -3,6 +3,7 @@ import zlib
 import os
 import gogdl.constants as constants
 import shutil
+import time
 from sys import exit
 
 PATH_SEPARATOR = os.sep
@@ -49,7 +50,9 @@ def get_secure_link(api_handler, path, gameId, generation=2):
     r = api_handler.session.get(url)
     if not r.ok:
         print(f"ERROR getting secure link for {path}")
-        exit(1)
+        time.sleep(0.2)
+        return get_secure_link(api_handler, path, gameId, generation)
+
     js = r.json()
 
     endpoint = classify_cdns(js["urls"], generation)
