@@ -127,6 +127,6 @@ class AuthorizationManager:
         client_id = arguments.client_id or CLIENT_ID
         client_secret = arguments.client_secret or CLIENT_SECRET
 
-        credentials = self.get_credentials(client_id)
+        credentials = self.get_credentials(client_id, client_secret)
 
         print(json.dumps(credentials))

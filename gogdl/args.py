@@ -51,9 +51,6 @@ def init_parser():
         "--skip-dlcs", dest="dlcs", action="store_false", help="Should skip dlcs"
     )
     download_parser.add_argument(
-        "--token", "-t", dest="token", help="Provide access_token", required=True
-    )
-    download_parser.add_argument(
         "--max-workers",
         dest="workers_count",
         default=0,
@@ -64,9 +61,6 @@ def init_parser():
         "import", help="Show data about game in the specified path"
     )
     import_parser.add_argument("path")
-    import_parser.add_argument(
-        "--token", "-t", dest="token", help="Provide access_token"
-    )
 
     calculate_size_parser = subparsers.add_parser(
         "info", help="Calculates estimated download size and list of DLCs"
@@ -81,9 +75,6 @@ def init_parser():
     )
     calculate_size_parser.add_argument(
         "--build", "-b", dest="build", help="Specify buildId"
-    )
-    calculate_size_parser.add_argument(
-        "--token", "-t", dest="token", help="Provide access_token", required=True
     )
     calculate_size_parser.add_argument("--lang", "-l", help="Specify game language")
     calculate_size_parser.add_argument(
@@ -115,22 +106,12 @@ def init_parser():
     launch_parser.add_argument(
         "--override-exe", dest="override_exe", help="Override executable to be run"
     )
-    launch_parser.add_argument(
-        "--token", "-t", dest="token", help="Provide access_token", required=False
-    )
 
     save_parser = subparsers.add_parser("save-sync", help="Sync game saves")
     save_parser.add_argument("path", help="Path to sync files")
     save_parser.add_argument("id", help="Game id")
     save_parser.add_argument(
         "--ts", dest="timestamp", help="Last sync timestamp", required=True
-    )
-    save_parser.add_argument(
-        "--token",
-        "-t",
-        dest="token",
-        help="Provide refresh_token to generate game specific auth keys",
-        required=False,
     )
     save_parser.add_argument("--name", dest="dirname", default="__default")
     save_parser.add_argument(
@@ -164,13 +145,6 @@ def init_parser():
     clear_parser = subparsers.add_parser("save-clear", help="Clear cloud game saves")
     clear_parser.add_argument("path", help="Path to sync files")
     clear_parser.add_argument("id", help="Game id")
-    clear_parser.add_argument(
-        "--token",
-        "-t",
-        dest="token",
-        help="Provide refresh_token to generate game specific auth keys",
-        required=False,
-    )
     clear_parser.add_argument("--name", dest="dirname", default="__default")
 
     clear_parser.add_argument(
