@@ -21,6 +21,8 @@ class DLWorker:
         self.logger = logging.getLogger("DOWNLOAD_WORKER")
         self.downloaded_size = 0
 
+        self.retries = 3
+
     def do_stuff(self, is_dependency=False):
         self.is_dependency = is_dependency
         if os_platform == "win32":
@@ -136,11 +138,16 @@ class DLWorker:
             response = self.api_handler.session.get(
                 url, stream=True, allow_redirects=True
             )
-            if not response.ok:
+            if response.status_code == 403:
                 self.api_handler.get_new_secure_link(self.data.product_id)
                 self.get_file(path, compressed_sum, decompressed_sum, index)
                 return
 
+            if not response.ok:
+                if self.retries > 0:
+                    self.retries -= 1
+                    self.get_file(path, compressed_sum, decompressed_sum, index)
+                return
             total = response.headers.get("Content-Length")
             if total is None:
                 self.progress.update_download_speed(len(response.content))
@@ -214,6 +221,8 @@ class DLWorkerV1:
         self.logger = logging.getLogger("DOWNLOAD_WORKER_V1")
         self.downloaded_size = 0
 
+        self.retries = 3
+
     def do_stuff(self, is_dependency=False):
         if self.data["path"].startswith("/"):
             self.data["path"] = self.data["path"][1:]
@@ -257,12 +266,17 @@ class DLWorkerV1:
             response = self.api_handler.session.get(
                 download_link, headers=headers, stream=True, allow_redirects=True
             )
-            if not response.ok:
+            if response.status_code == 403:
                 self.api_handler.get_new_secure_link(self.data['url'].split("/")[0],
                                                      f"/{self.platform}/{self.build_id}",
                                                      1)
 
                 self.get_file(item_path)
+                return
+            if not response.ok:
+                if self.retries > 0:
+                    self.retries -= 1
+                    self.get_file(item_path)
                 return
             total = response.headers.get("Content-Length")
             if total is None:

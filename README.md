@@ -18,7 +18,8 @@ pip install requests
 
 To run a code locally, use `bin/gogdl` script, which is a convenient python wrapper
 
-If you are testing authenticated endpoint you need to obtain access token allowing you to proceed, you can get one from Heroic: `$XDG_CONFIG_PATH/heroic/gog_store/config.json` or `$HOME/.config/heroic/gog_store/config.json`
+gogdl now manages authentication, so it no longer needs --token parameter, although you now need to provide a path to json file where the tokens will be stored
+Heroic uses `$XDG_CONFIG_HOME/heroic/gog_store/auth.json`
 
 Here is the command to pull the source code
 
