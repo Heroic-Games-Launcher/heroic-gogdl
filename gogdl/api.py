@@ -76,7 +76,7 @@ class ApiHandler:
                 credentials = self.auth_manager.get_credentials()
                 token = credentials["access_token"]
                 self.session.headers["Authorization"] = f"Bearer {token}"
-        return dl_utils.get_secure_link(self, path, id, generation)
+        return dl_utils.get_secure_link(self, path, id, generation, self.logger)
 
     def get_new_secure_link(self, id, path="/", generation=2):
         if id not in self.working_on_ids:

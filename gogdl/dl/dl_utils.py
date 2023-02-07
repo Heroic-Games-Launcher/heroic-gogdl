@@ -42,7 +42,7 @@ def galaxy_path(manifest: str):
     return galaxy_path
 
 
-def get_secure_link(api_handler, path, gameId, generation=2):
+def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
     url = ""
     if generation == 2:
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&generation=2&path={path}"
@@ -51,12 +51,15 @@ def get_secure_link(api_handler, path, gameId, generation=2):
 
     try:
         request = urllib.request.Request(url, None, api_handler.session.headers)
+        logger.info("requesting new secure link")
         r = urllib.request.urlopen(request, None, timeout=1)
+        logger.info("new secure link response")
     except BaseException:
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation)
 
     if r.status != 200:
+        logger.info("invalid secure link response")
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation)
         
@@ -73,6 +76,7 @@ def get_secure_link(api_handler, path, gameId, generation=2):
 
         return merge_url_with_params(url_format, parameters)
 
+    logger.info(f"new secure link endpoint {endpoint}")
     return endpoint
 
 
