@@ -54,14 +54,15 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
         logger.info("requesting new secure link")
         r = urllib.request.urlopen(request, None, timeout=1)
         logger.info("new secure link response")
-    except BaseException:
+    except BaseException as exception:
+        logger.info(exception)
         time.sleep(0.2)
-        return get_secure_link(api_handler, path, gameId, generation)
+        return get_secure_link(api_handler, path, gameId, generation, logger)
 
     if r.status != 200:
         logger.info("invalid secure link response")
         time.sleep(0.2)
-        return get_secure_link(api_handler, path, gameId, generation)
+        return get_secure_link(api_handler, path, gameId, generation, logger)
         
 
     body = r.read().decode("utf-8")
