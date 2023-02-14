@@ -4,7 +4,7 @@ import os
 import gogdl.constants as constants
 import shutil
 import time
-import urllib
+import requests
 from sys import exit
 
 PATH_SEPARATOR = os.sep
@@ -50,23 +50,21 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&type=depot&path={path}"
 
     try:
-        request = urllib.request.Request(url, None, api_handler.session.headers)
         logger.info("requesting new secure link")
-        r = urllib.request.urlopen(request, None, timeout=1)
+        r = requests.get(url, headers=api_handler.session.headers, timeout=1)
         logger.info("new secure link response")
     except BaseException as exception:
         logger.info(exception)
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation, logger)
 
-    if r.status != 200:
+    if r.status_code != 200:
         logger.info("invalid secure link response")
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation, logger)
         
 
-    body = r.read().decode("utf-8")
-    js = json.loads(body)
+    js = r.json()
 
     endpoint = classify_cdns(js["urls"], generation)
     url_format = endpoint["url_format"]
