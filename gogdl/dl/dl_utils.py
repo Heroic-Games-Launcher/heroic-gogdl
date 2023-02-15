@@ -50,9 +50,7 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&type=depot&path={path}"
 
     try:
-        logger.info("requesting new secure link")
         r = requests.get(url, headers=api_handler.session.headers, timeout=1)
-        logger.info("new secure link response")
     except BaseException as exception:
         logger.info(exception)
         time.sleep(0.2)
@@ -75,7 +73,6 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
 
         return merge_url_with_params(url_format, parameters)
 
-    logger.info(f"new secure link endpoint {endpoint}")
     return endpoint
 
 
