@@ -27,10 +27,9 @@ def main():
     if not arguments.command:
         print("No command provided!")
         return
-    api_handler = api.ApiHandler(
-        arguments.token.strip('"') if arguments.token else None
-    )
-    clouds_storage_manager = saves.CloudStorageManager(api_handler)
+    authorization_manager = auth.AuthorizationManager(arguments.auth_config_path)
+    api_handler = api.ApiHandler(authorization_manager)
+    clouds_storage_manager = saves.CloudStorageManager(api_handler, authorization_manager)
 
     switcher = {}
     if arguments.command in ["download", "repair", "update", "info"]:
@@ -51,6 +50,7 @@ def main():
             "launch": launch.launch,
             "save-sync": clouds_storage_manager.sync,
             "save-clear": clouds_storage_manager.clear,
+            "auth": authorization_manager.handle_cli
         }
 
     function = switcher.get(arguments.command)

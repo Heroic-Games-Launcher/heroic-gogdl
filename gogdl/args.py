@@ -25,16 +25,12 @@ def init_parser():
         "import", help="Show data about game in the specified path"
     )
     import_parser.add_argument("path")
-    import_parser.add_argument(
-        "--token", "-t", dest="token", help="Provide access_token"
-    )
 
     # REDIST DOWNLOAD
 
     redist_download_parser = subparsers.add_parser("redist", aliases=["dependencies"],
                                                    help="Download specified dependencies to provided location")
 
-    redist_download_parser.add_argument("--token", "-t", help="Access token", required=False)
     redist_download_parser.add_argument("--ids", help="Coma separated ids", required=True)
     redist_download_parser.add_argument("--path", help="Location where to download the files", required=True)
     redist_download_parser.add_argument("--version", choices=["1", "2"], help="Provide a depot version")
@@ -130,9 +126,6 @@ def init_parser():
     calculate_size_parser.add_argument(
         "--build", "-b", dest="build", help="Specify buildId"
     )
-    calculate_size_parser.add_argument(
-        "--token", "-t", dest="token", help="Provide access_token", required=True
-    )
     calculate_size_parser.add_argument("--lang", "-l", help="Specify game language")
     calculate_size_parser.add_argument(
         "--max-workers",
@@ -165,9 +158,6 @@ def init_parser():
     launch_parser.add_argument("--wrapper", dest="wrapper")
     launch_parser.add_argument(
         "--override-exe", dest="override_exe", help="Override executable to be run"
-    )
-    launch_parser.add_argument(
-        "--token", "-t", dest="token", help="Provide access_token", required=False
     )
 
     # SAVES
