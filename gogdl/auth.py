@@ -86,6 +86,9 @@ class AuthorizationManager:
         :param client_secret:
         :return: bool if operation was success
         """
+        no_new_session = False
+        if client_id and client_secret:
+            no_new_session = True
         if not client_id:
             client_id = CLIENT_ID
         if not client_secret:
@@ -95,6 +98,9 @@ class AuthorizationManager:
         refresh_token = credentials["refresh_token"]
 
         url = f"https://auth.gog.com/token?client_id={client_id}&client_secret={client_secret}&grant_type=refresh_token&refresh_token={refresh_token}"
+
+        if no_new_session:
+            url = url + "&without_new_session=1"
 
         response = self.session.get(url)
 
