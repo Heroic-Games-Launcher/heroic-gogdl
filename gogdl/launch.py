@@ -33,7 +33,7 @@ def launch(arguments, unknown_args):
                     envvars["WINEPREFIX"] = arguments.wine_prefix
                 wrapper = [arguments.wine]
 
-        primary_task = get_preffered_task(info, arguments.force_task)
+        primary_task = get_preferred_task(info, arguments.preferred_task)
         launch_arguments = primary_task.get("arguments")
         compatibility_flags = primary_task.get("compatibilityFlags")
         executable = os.path.join(arguments.path, primary_task["path"])
@@ -162,7 +162,7 @@ def launch(arguments, unknown_args):
     sys.exit(status)
 
 
-def get_preffered_task(info, index):
+def get_preferred_task(info, index):
     primaryTask = None
     for task in info["playTasks"]:
         if task.get("isPrimary") == True:
