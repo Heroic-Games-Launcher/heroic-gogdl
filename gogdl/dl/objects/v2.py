@@ -1,11 +1,14 @@
 import json
+import sys
+import os
+
 from gogdl.dl import dl_utils
 from gogdl import constants
 
 
 class DepotFile:
     def __init__(self, item_data, product_id):
-        self.path = item_data["path"].replace("\\", "/")
+        self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep)
         self.chunks = item_data["chunks"]
         self.flags = item_data.get("flags")
         self.md5 = item_data.get("md5")
@@ -17,7 +20,7 @@ class DepotFile:
 # Yes that's the thing
 class DepotDirectory:
     def __init__(self, item_data):
-        self.path = item_data["path"]
+        self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep).rstrip(os.sep)
 
 
 class Depot:
@@ -34,9 +37,9 @@ class Depot:
         status = False
         for lang in self.languages:
             status = (
-                lang == "*"
-                or self.target_lang == lang
-                or self.target_lang.split("-")[0] == lang
+                    lang == "*"
+                    or self.target_lang == lang
+                    or self.target_lang.split("-")[0] == lang
             )
             if status:
                 break
@@ -75,7 +78,7 @@ class Manifest:
         dlc_ids = [dlc["id"] for dlc in self.dlcs]
         for depot in depots:
             if depot["productId"] in dlc_ids or (
-                not self.dlc_only and self.product_id == depot["productId"]
+                    not self.dlc_only and self.product_id == depot["productId"]
             ):
                 parsed.append(Depot(language, depot))
 
@@ -112,6 +115,25 @@ class Manifest:
                     self.files.append(DepotFile(item, depot.product_id))
                 else:
                     self.dirs.append(DepotDirectory(item))
+
+        self.__normalize_file_paths()
+
+    def __normalize_file_paths(self):
+        if sys.platform == 'win32':
+            # We don't need to do that on windows, since it has case-folding by default
+            return
+
+        dir_paths = [directory.path for directory in self.dirs]
+        file_paths = [file.path for file in self.files]
+
+        casefolded_dirs = dl_utils.case_fold(dir_paths)
+        casefolded_files = dl_utils.case_fold(file_paths)
+
+        for i in range(len(self.dirs)):
+            self.dirs[i].path = casefolded_dirs[i]
+
+        for i in range(len(self.files)):
+            self.files[i].path = casefolded_files[i]
 
 
 class FileDiff:

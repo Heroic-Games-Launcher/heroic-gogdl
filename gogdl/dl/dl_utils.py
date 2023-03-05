@@ -65,7 +65,6 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
         logger.info("invalid secure link response")
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation, logger)
-        
 
     js = r.json()
 
@@ -116,7 +115,6 @@ def classify_cdns(cdns, generation=2):
     return best
 
 
-
 def calculate_sum(path, function, read_speed_function=None):
     with open(path, "rb") as f:
         calculate = function()
@@ -153,3 +151,32 @@ def get_range_header(offset, size):
     from_value = offset
     to_value = (int(offset) + int(size)) - 1
     return f"bytes={from_value}-{to_value}"
+
+
+def case_fold(files):
+    prepared_files = [f for f in files]
+
+    for i in range(len(prepared_files)):
+        for y in range(len(prepared_files[i:])):
+            path1 = prepared_files[i]
+            path2 = prepared_files[i + y]
+
+            if path1 == path2:
+                continue
+
+            common_part = os.path.commonpath([path1.casefold(), path2.casefold()]).split(os.sep)
+            common_part_len = len(common_part)
+
+            split_path1 = path1.split(os.sep)
+            split_path2 = path2.split(os.sep)
+
+            if common_part_len == 0 or not common_part[0] or len(split_path1) == 1 or len(split_path2) == 1:
+                continue
+
+            for x in range(common_part_len):
+                split_path2[x] = split_path1[x]
+
+            prepared_files[i] = os.sep.join(split_path1)
+            prepared_files[i + y] = os.sep.join(split_path2)
+
+    return prepared_files
