@@ -10,6 +10,7 @@ GOG_CLOUDSTORAGE = "https://cloudstorage.gog.com"
 DEPENDENCIES_URL = "https://content-system.gog.com/dependencies/repository?generation=2"
 DEPENDENCIES_V1_URL = "https://content-system.gog.com/redists/repository"
 
+NON_NATIVE_SEP = "\\" if os.sep == "/" else "/"
 
 # Use only for Linux
 CACHE_DIR = (
