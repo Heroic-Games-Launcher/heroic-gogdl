@@ -153,19 +153,20 @@ def case_fold(files):
 
     for i in range(len(prepared_files)):
         for y in range(len(prepared_files[i:])):
+            if y == 0:
+                continue
+
             path1 = prepared_files[i]
             path2 = prepared_files[i + y]
 
-            if path1 == path2:
-                continue
-
-            common_part = os.path.commonpath([path1.casefold(), path2.casefold()]).split(os.sep)
-            common_part_len = len(common_part)
-
             split_path1 = path1.split(os.sep)
             split_path2 = path2.split(os.sep)
+            if len(split_path1) == 1 or len(split_path2) == 1:
+                continue
+            common_part = os.path.commonpath([path1.lower(), path2.lower()]).split(os.sep)
+            common_part_len = len(common_part)
 
-            if common_part_len == 0 or not common_part[0] or len(split_path1) == 1 or len(split_path2) == 1:
+            if common_part_len == 0 or not common_part[0]:
                 continue
 
             for x in range(common_part_len):

@@ -85,6 +85,8 @@ def init_parser():
     download_parser.add_argument(
         "--dlc-only", dest="dlc_only", action="store_true", help="Download only DLC"
     )
+    download_parser.add_argument("--branch", help="Choose build branch to use")
+    download_parser.add_argument("--password", help="Password to access other branches")
     download_parser.add_argument(
         "--max-workers",
         dest="workers_count",
@@ -127,6 +129,8 @@ def init_parser():
         "--build", "-b", dest="build", help="Specify buildId"
     )
     calculate_size_parser.add_argument("--lang", "-l", help="Specify game language")
+    calculate_size_parser.add_argument("--branch", help="Choose build branch to use")
+    calculate_size_parser.add_argument("--password", help="Password to access other branches")
     calculate_size_parser.add_argument(
         "--max-workers",
         dest="workers_count",

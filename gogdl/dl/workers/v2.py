@@ -56,9 +56,10 @@ class DLWorker:
             md5 = chunk["md5"]
             chunk_file = open(item_path + f".part{index}", "rb")
 
-            data = chunk_file.read()
             decompression = zlib.decompressobj(15)
-            target_file.write(decompression.decompress(data))
+
+            while data := chunk_file.read(10 * 1024 * 1024):
+                target_file.write(decompression.decompress(data))
 
             chunk_file.close()
             os.remove(item_path + f".part{index}")

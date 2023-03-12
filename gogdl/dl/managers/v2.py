@@ -1,14 +1,18 @@
 # Handle newer depots download
 # This was introduced in GOG Galaxy 2.0, it features compression and files split by chunks
+import json
 import sys
 import signal
 import gogdl.dl.objects.v2 as v2
 from gogdl.dl.workers.v2 import DLWorker
 from gogdl.dl import dl_utils
 from gogdl.dl.managers import dependencies
+from gogdl import constants
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import os
 import logging
+
+manifests_dir = os.path.join(constants.CONFIG_DIR, "manifests")
 
 
 class Manager:
@@ -23,14 +27,21 @@ class Manager:
 
         self.api_handler = generic_manager.api_handler
         self.should_append_folder_name = generic_manager.should_append_folder_name
+        self.is_verifying = generic_manager.is_verifying
 
         self.build = generic_manager.target_build
         self.version_name = self.build["version_name"]
 
         self.lang = self.arguments.lang
         self.dlcs_should_be_downloaded = self.arguments.dlcs
-        self.dlcs_list = self.arguments.dlcs_list
+        if self.arguments.dlcs_list:
+            self.dlcs_list = self.arguments.dlcs_list.split(",")
+        else:
+            self.dlcs_list = list()
         self.dlc_only = self.arguments.dlc_only
+
+        self.manifest = None
+
         self.logger = logging.getLogger("V2")
         self.logger.info("Initialized V2 Download Manager")
 
@@ -57,27 +68,41 @@ class Manager:
     def download(self):
         self.get_meta()
         dlcs_user_owns = self.get_dlcs_user_owns(
-            requested_dlcs=self.arguments.dlcs_list
+            requested_dlcs=self.dlcs_list
         )
         if self.arguments.dlcs_list:
             self.logger.info(f"Requested dlcs {self.arguments.dlcs_list}")
-
         self.logger.debug("Parsing manifest")
 
         self.manifest = v2.Manifest(
             self.meta, self.lang, dlcs_user_owns, self.api_handler, self.dlc_only
         )
-        old_manifest = None  # TODO: Load old manifest
 
-        self.manifest.get_files()
+        manifest_path = os.path.join(manifests_dir, self.game_id)
+        old_manifest = None
+
+        # Load old manifest
+        if os.path.exists(manifest_path):
+            with open(manifest_path, 'r') as f_handle:
+                data = f_handle.read()
+                json_data = json.loads(data)
+                old_manifest = v2.Manifest.from_json(json_data, self.api_handler)
+
+        if self.is_verifying:
+            if old_manifest:
+                self.manifest = old_manifest
+                old_manifest = None
+
+        if self.manifest:
+            self.manifest.get_files()
+        if old_manifest:
+            old_manifest.get_files()
         diff = v2.ManifestDiff.compare(self.manifest, old_manifest)
 
         self.logger.info(diff)
 
         dependencies_manager = dependencies.DependenciesManager(self.manifest.dependencies_ids, self.path, 2,
                                                                 self.arguments.workers_count, self.api_handler, True)
-
-
 
         secure_link_endpoints_ids = [product["id"] for product in dlcs_user_owns]
         if not self.dlc_only:
@@ -99,7 +124,8 @@ class Manager:
 
         for file in diff.deleted:
             file_path = os.path.join(self.path, file.path)
-            print(f"TODO: Remove file {file_path}")
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
         for directory in self.manifest.dirs:
             os.makedirs(os.path.join(self.path, directory.path), exist_ok=True)
@@ -130,6 +156,13 @@ class Manager:
             if thread.cancelled():
                 self.cancelled = True
                 break
+
+        dl_utils.prepare_location(manifests_dir)
+
+        if self.manifest:
+            with open(manifest_path, 'w') as f_handle:
+                data = self.manifest.serialize_to_json()
+                f_handle.write(data)
 
     def get_meta(self):
         meta_url = self.build["link"]
