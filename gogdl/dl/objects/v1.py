@@ -10,6 +10,8 @@ class Depot:
         status = True
         for lang in self.languages:
             status = lang == "Neutral" or lang == self.target_lang
+            if status:
+                break
         return status
 
 
@@ -22,8 +24,8 @@ class Dependency:
 
 class File:
     def __init__(self, data):
-        self.offset: data["offset"]
-        self.hash: data["hash"]
-        self.url: data["url"]
-        self.path: data["path"]
-        self.size: data["size"]
+        self.offset = data["offset"]
+        self.hash = data["hash"]
+        self.url = data["url"]
+        self.path = data["path"]
+        self.size = data["size"]

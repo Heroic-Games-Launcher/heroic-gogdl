@@ -1,6 +1,7 @@
 import json
 import sys
 import os
+import time
 
 from gogdl.dl import dl_utils
 from gogdl import constants
@@ -116,7 +117,7 @@ class Manifest:
                 else:
                     self.dirs.append(DepotDirectory(item))
 
-        self.__normalize_file_paths()
+        # self.__normalize_file_paths()
 
     def __normalize_file_paths(self):
         if sys.platform == 'win32':
@@ -126,14 +127,14 @@ class Manifest:
         dir_paths = [directory.path for directory in self.dirs]
         file_paths = [file.path for file in self.files]
 
-        casefolded_dirs = dl_utils.case_fold(dir_paths)
-        casefolded_files = dl_utils.case_fold(file_paths)
+        case_folded_dirs = dl_utils.case_fold(dir_paths)
+        case_folded_files = dl_utils.case_fold(file_paths)
 
         for i in range(len(self.dirs)):
-            self.dirs[i].path = casefolded_dirs[i]
+            self.dirs[i].path = case_folded_dirs[i]
 
         for i in range(len(self.files)):
-            self.files[i].path = casefolded_files[i]
+            self.files[i].path = case_folded_files[i]
 
 
 class FileDiff:
