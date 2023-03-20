@@ -300,9 +300,8 @@ class CloudStorageManager:
             )
             os.utime(file.absolute_path, (f_timestamp, f_timestamp))
         except ValueError:
-            print("Header", response.headers.get("X-Object-Meta-LocalLastModified"))
-            print("File", file.absolute_path)
-            raise
+            self.logger.warning(f"Incorrect LastModified header for file {file.relative_path} {response.headers.get('X-Object-Meta-LocalLastModified')} ; Ignoring...")
+            pass 
 
 
 class SyncClassifier:
