@@ -231,7 +231,7 @@ class CloudStorageManager:
         )
         meta_url = builds["items"][0]["link"]
 
-        meta, headers = dl_utils.get_zlib_encoded(self.api, meta_url)
+        meta, headers = dl_utils.get_zlib_encoded(self.api, meta_url, self.logger)
         return meta["clientId"], meta["clientSecret"]
 
     def delete_file(self, file: SyncFile):
@@ -270,7 +270,7 @@ class CloudStorageManager:
             )
         except:
             if (retries > 1):
-                self.logger.debug(f"Failed sync of {file}, retrying (retries left {retries - 1})")
+                self.logger.info(f"Failed sync of {file}, retrying (retries left {retries - 1})")
                 self.download_file(file, retries - 1)
                 return
             else:

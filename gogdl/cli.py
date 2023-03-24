@@ -19,7 +19,7 @@ def display_version():
 
 def main():
     arguments, unknown_args = args.init_parser()
-    logger.debug(arguments)
+    logger.info(arguments)
     if arguments.display_version:
         display_version()
         return

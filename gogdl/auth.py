@@ -107,7 +107,7 @@ class AuthorizationManager:
         return True
 
     def handle_cli(self, arguments, unknown_arguments):
-        self.logger.debug("Handling cli")
+        self.logger.info("Handling cli")
 
         if arguments.authorization_code:
             response = self.session.get(CODE_URL + arguments.authorization_code)

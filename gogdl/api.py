@@ -35,7 +35,7 @@ class ApiHandler:
             expanded_arg += ','.join(expanded)
             url += expanded_arg
         response = self.session.get(url)
-        self.logger.debug(url)
+        self.logger.info(url)
         if response.ok:
             return response.json()
         else:
@@ -44,7 +44,7 @@ class ApiHandler:
     def get_game_details(self, id):
         url = f'{constants.GOG_EMBED}/account/gameDetails/{id}.json'
         response = self.session.get(url)
-        self.logger.debug(url)
+        self.logger.info(url)
         if response.ok:
             return response.json()
 
@@ -58,7 +58,7 @@ class ApiHandler:
         json_data = json.loads(response.content)
         if 'repository_manifest' in json_data:
             self.logger.info("Getting repository manifest")
-            return dl_utils.get_zlib_encoded(self, str(json_data['repository_manifest']))[0], json_data.get('version')
+            return dl_utils.get_zlib_encoded(self, str(json_data['repository_manifest']), self.logger)[0], json_data.get('version')
 
     def does_user_own(self, id):
         if not self.owned:

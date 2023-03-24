@@ -17,13 +17,20 @@ def get_json(api_handler, url):
     return x.json()
 
 
-def get_zlib_encoded(api_handler, url):
+def get_zlib_encoded(api_handler, url, logger=None):
     x = api_handler.session.get(url)
+    if logger:
+        logger.info(x.status_code)
+        logger.info(x.headers)
     if not x.ok:
+        if logger:
+            logger.info("zlib response != 200")
         return
     try:
         decompressed = json.loads(zlib.decompress(x.content, 15))
     except zlib.error:
+        if logger:
+            logger.info("error decompressing response")
         return json.loads(x.content), x.headers
     return decompressed, x.headers
 
@@ -31,7 +38,7 @@ def get_zlib_encoded(api_handler, url):
 def prepare_location(path, logger=None):
     os.makedirs(path, exist_ok=True)
     if logger:
-        logger.debug(f"Created directory {path}")
+        logger.info(f"Created directory {path}")
 
 
 # V1 Compatible
