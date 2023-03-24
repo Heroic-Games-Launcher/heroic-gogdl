@@ -18,21 +18,22 @@ def get_json(api_handler, url):
 
 
 def get_zlib_encoded(api_handler, url, logger=None):
-    x = api_handler.session.get(url)
+    r = requests.get(url, headers=api_handler.session.headers, timeout=1)
     if logger:
-        logger.info(x.status_code)
-        logger.info(x.headers)
-    if not x.ok:
+        logger.info(r.status_code)
+        logger.info(r.headers)
+        logger.info(r.content)
+    if r.status_code != 200:
         if logger:
             logger.info("zlib response != 200")
         return
     try:
-        decompressed = json.loads(zlib.decompress(x.content, 15))
+        decompressed = json.loads(zlib.decompress(r.content, 15))
     except zlib.error:
         if logger:
             logger.info("error decompressing response")
-        return json.loads(x.content), x.headers
-    return decompressed, x.headers
+        return json.loads(r.content), r.headers
+    return decompressed, r.headers
 
 
 def prepare_location(path, logger=None):
