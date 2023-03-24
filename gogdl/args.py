@@ -97,6 +97,7 @@ def init_parser():
         choices=["windows", "osx", "linux"],
         required=True,
     )
+    launch_parser.add_argument("--prefer-task", dest="preferred_task", default=None, help="Select playTask index to be run")
     launch_parser.add_argument(
         "--no-wine", action="store_true", dest="dont_use_wine", default=False
     )
