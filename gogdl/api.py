@@ -35,7 +35,7 @@ class ApiHandler:
             expanded_arg += ','.join(expanded)
             url += expanded_arg
         response = self.session.get(url)
-        self.logger.info(url)
+        self.logger.debug(url)
         if response.ok:
             return response.json()
         else:
@@ -44,7 +44,7 @@ class ApiHandler:
     def get_game_details(self, id):
         url = f'{constants.GOG_EMBED}/account/gameDetails/{id}.json'
         response = self.session.get(url)
-        self.logger.info(url)
+        self.logger.debug(url)
         if response.ok:
             return response.json()
 

@@ -101,7 +101,7 @@ class DownloadManager:
         self.logger.info(f'Game is compatible') if is_compatible else self.logger.error(f'Game is incompatible')
         if not is_compatible:
             return False
-        self.logger.info('Getting Build data')
+        self.logger.debug('Getting Build data')
         # Builds data
         self.builds = dl_utils.get_json(
             self.api_handler,
@@ -183,7 +183,7 @@ class DownloadManager:
                     if depot_object.check_language():
                         collected_depots.append(depot_object)
 
-        self.logger.info(
+        self.logger.debug(
             f"Collected {len(collected_depots)} depots, proceeding to download, Dependencies Depots: {len(self.dependencies)}")
         if self.depot_version == 2:
             for depot in collected_depots:
@@ -240,14 +240,14 @@ class DownloadManager:
         # print(self.meta)
         if self.depot_version == 1:
             return self.perform_download_V1()
-        self.logger.info("Collecting base game depots")
+        self.logger.debug("Collecting base game depots")
 
         files = self.collect_depots()
 
         download_files = files[0]
         dependency_files = files[1]
 
-        self.logger.info(
+        self.logger.debug(
             f"Downloading {len(download_files)} game files, and {len(dependency_files)} dependency files proceeding")
 
         size_data = self.calculate_size(download_files, dependency_files)
@@ -263,7 +263,7 @@ class DownloadManager:
             self.logger.error("Not enough available disk space")
             return False
         allowed_threads = max(1, self.allowed_threads)
-        self.logger.info("Spawning progress bar process")
+        self.logger.debug("Spawning progress bar process")
         self.progress = ProgressBar(download_size, f"{round(readable_download_size[0], 2)}{readable_download_size[1]}",
                                     50)
         self.progress.start()
@@ -295,7 +295,7 @@ class DownloadManager:
         return not self.cancelled
 
     def perform_download_V1(self):
-        self.logger.info("Redirecting download to V1 handler")
+        self.logger.debug("Redirecting download to V1 handler")
 
         download_files, dependency_files = self.collect_depots()
 
@@ -320,7 +320,7 @@ class DownloadManager:
         allowed_threads = max(1, self.allowed_threads)
         self.thpool = ThreadPoolExecutor(max_workers=allowed_threads)
 
-        self.logger.info("Spawning progress bar process")
+        self.logger.debug("Spawning progress bar process")
         self.progress = ProgressBar(download_size, f"{round(readable_download_size[0], 2)}{readable_download_size[1]}",
                                     50)
         self.progress.start()

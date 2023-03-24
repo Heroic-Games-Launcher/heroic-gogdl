@@ -270,7 +270,7 @@ class CloudStorageManager:
             )
         except:
             if (retries > 1):
-                self.logger.info(f"Failed sync of {file}, retrying (retries left {retries - 1})")
+                self.logger.debug(f"Failed sync of {file}, retrying (retries left {retries - 1})")
                 self.download_file(file, retries - 1)
                 return
             else:

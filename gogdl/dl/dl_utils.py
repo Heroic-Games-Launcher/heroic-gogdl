@@ -19,10 +19,6 @@ def get_json(api_handler, url):
 
 def get_zlib_encoded(api_handler, url, logger=None):
     r = requests.get(url, headers=api_handler.session.headers, timeout=1)
-    if logger:
-        logger.info(r.status_code)
-        logger.info(r.headers)
-        logger.info(r.content)
     if r.status_code != 200:
         if logger:
             logger.info("zlib response != 200")
@@ -39,7 +35,7 @@ def get_zlib_encoded(api_handler, url, logger=None):
 def prepare_location(path, logger=None):
     os.makedirs(path, exist_ok=True)
     if logger:
-        logger.info(f"Created directory {path}")
+        logger.debug(f"Created directory {path}")
 
 
 # V1 Compatible

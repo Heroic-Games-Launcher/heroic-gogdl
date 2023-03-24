@@ -9,4 +9,4 @@
 """
 
 
-version = "0.7-test1"
+version = "0.7.1"
