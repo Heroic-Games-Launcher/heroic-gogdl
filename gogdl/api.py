@@ -58,7 +58,7 @@ class ApiHandler:
         json_data = json.loads(response.content)
         if 'repository_manifest' in json_data:
             self.logger.info("Getting repository manifest")
-            return dl_utils.get_zlib_encoded(self, str(json_data['repository_manifest']))[0], json_data.get('version')
+            return dl_utils.get_zlib_encoded(self, str(json_data['repository_manifest']), self.logger)[0], json_data.get('version')
 
     def does_user_own(self, id):
         if not self.owned:

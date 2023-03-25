@@ -128,8 +128,8 @@ class DownloadManager:
             return False
 
         meta_url = target_build['link']
-        self.logger.debug('Getting Meta data')
-        self.meta, headers = dl_utils.get_zlib_encoded(self.api_handler, meta_url)
+        self.logger.info('Getting Meta data')
+        self.meta, headers = dl_utils.get_zlib_encoded(self.api_handler, meta_url, self.logger)
 
         self.versionEtag = headers.get("Etag")
         self.versionName = target_build['version_name']
@@ -189,12 +189,12 @@ class DownloadManager:
             for depot in collected_depots:
                 manifest = dl_utils.get_zlib_encoded(
                     self.api_handler,
-                    f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}')[0]
+                    f'{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}', self.logger)[0]
                 download_files += self.get_depot_list(manifest, depot.product_id)
             for depot in self.dependencies:
                 manifest = dl_utils.get_zlib_encoded(
                     self.api_handler,
-                    f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}')[
+                    f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}', self.logger)[
                     0]
                 dependency_files += self.get_depot_list(manifest)
         else:
