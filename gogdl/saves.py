@@ -290,15 +290,18 @@ class CloudStorageManager:
             ):
                 f.write(data)
 
-        f_timestamp = (
-            datetime.datetime.fromisoformat(
-                response.headers.get("X-Object-Meta-LocalLastModified")
+        try:
+            f_timestamp = (
+                datetime.datetime.fromisoformat(
+                    response.headers.get("X-Object-Meta-LocalLastModified")
+                )
+                .astimezone()
+                .timestamp()
             )
-            .astimezone()
-            .timestamp()
-        )
-        os.utime(file.absolute_path, (f_timestamp, f_timestamp))
-
+            os.utime(file.absolute_path, (f_timestamp, f_timestamp))
+        except ValueError:
+            self.logger.warning(f"Incorrect LastModified header for file {file.relative_path} {response.headers.get('X-Object-Meta-LocalLastModified')} ; Ignoring...")
+            pass 
 
 
 class SyncClassifier:
