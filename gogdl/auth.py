@@ -21,13 +21,13 @@ class AuthorizationManager:
         self.credentials_data = {}
         self.__read_config()
 
-        self.session.headers.update({
-            'User-Agent': f'gogdl/{version} (Heroic Games Launcher)'
-        })
+        self.session.headers.update(
+            {"User-Agent": f"gogdl/{version} (Heroic Games Launcher)"}
+        )
 
     def __read_config(self):
         if os.path.exists(self.config_path):
-            with open(self.config_path, 'r') as f:
+            with open(self.config_path, "r") as f:
                 self.credentials_data = json.loads(f.read())
                 f.close()
 
@@ -59,7 +59,7 @@ class AuthorizationManager:
             if self.refresh_credentials(client_id, client_secret):
                 credentials = self.credentials_data.get(client_id)
             else:
-                raise Exception("Failed to obtain credentials")
+                return None
         return credentials
 
     def is_credential_expired(self, client_id=None) -> bool:
@@ -76,7 +76,7 @@ class AuthorizationManager:
         if not credentials:
             raise ValueError("Credential doesn't exist")
 
-        return time.time() >= credentials['loginTime'] + credentials["expires_in"]
+        return time.time() >= credentials["loginTime"] + credentials["expires_in"]
 
     def refresh_credentials(self, client_id=None, client_secret=None) -> bool:
         """
@@ -102,8 +102,13 @@ class AuthorizationManager:
         if no_new_session:
             url = url + "&without_new_session=1"
 
-        response = self.session.get(url)
-
+        try:
+            response = self.session.get(url, timeout=10)
+        except (
+            requests.exceptions.ConnectionError or requests.exception.ConnectionTimeout
+        ):
+            self.logger.error("Failed to refresh credentials")
+            return False
         if not response.ok:
             return False
         data = response.json()
