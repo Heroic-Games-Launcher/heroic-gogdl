@@ -112,6 +112,10 @@ class DownloadManager:
             return False
 
         target_build = self.builds['items'][0]
+        for build in self.builds['items']:
+            if not build['branch']:
+                target_build = build
+                break
         if args.build:
             # Find build
             for build in self.builds['items']:

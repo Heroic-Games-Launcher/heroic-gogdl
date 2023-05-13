@@ -37,6 +37,8 @@ class ProgressBar(threading.Thread):
             runtime_s = int((running_time % 3600) % 60)
 
             time_since_last_update = time() - self.last_update
+            if time_since_last_update == 0:
+                time_since_last_update = 1
             size_left = self.total - self.downloaded
 
             # average_speed = self.downloaded / running_time
