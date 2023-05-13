@@ -1,4 +1,5 @@
 from multiprocessing import cpu_count
+from sys import exit
 import logging
 import json
 
@@ -24,6 +25,8 @@ class Manager:
 
         self.logger = logging.getLogger("GENERIC DOWNLOAD_MANAGER")
 
+        self.galaxy_api_data = None
+
         self.download_manager = None
         self.builds = None
         self.target_build = None
@@ -47,11 +50,8 @@ class Manager:
 
         download_size_response = self.download_manager.get_download_size()
 
-        available_branches = set([build["branch"] for build in self.builds["items"]])
-        download_size_response["available_branches"] = list(available_branches)
 
         print(json.dumps(download_size_response))
-        return
 
     def download(self, arguments, unknown_arguments):
         self.setup_download_manager()
@@ -59,15 +59,20 @@ class Manager:
         self.download_manager.download()
 
     def setup_download_manager(self):
+        self.galaxy_api_data = self.api_handler.get_item_data(self.game_id, ["downloads", "expanded_dlcs"])
 
-        if self.platform == "linux":
+        if self.platform == "linux" and not self.galaxy_api_data["content_system_compatibility"]["linux"]:
             self.logger.info(
-                "Platform is Linux, redirecting download to Linux Native manager"
+                "Platform is Linux, redirecting download to Linux Native installer manager"
             )
 
             self.download_manager = linux.Manager(self)
 
             return
+
+        if not self.galaxy_api_data["content_system_compatibility"][self.platform]:
+            self.logger.error("Game doesn't support content system api, unable to proceed")
+            exit(1)
 
         self.builds = self.get_builds()
 

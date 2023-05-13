@@ -86,13 +86,13 @@ class Manifest:
         return list(filter(lambda x: x.check_language(), parsed))
 
     def list_languages(self):
-        languages_dict = dict()
+        languages_dict = set()
         for depot in self.depots:
             for language in depot.languages:
                 if language != "*":
-                    languages_dict[language] = True
+                    languages_dict.add(language)
 
-        return list(languages_dict.keys())
+        return list(languages_dict)
 
     def calculate_download_size(self):
         download_size = 0
@@ -111,7 +111,6 @@ class Manifest:
                 f"{constants.GOG_CDN}/content-system/v2/meta/{dl_utils.galaxy_path(depot.manifest)}",
             )[0]
             for item in manifest["depot"]["items"]:
-                obj = None
                 if item["type"] == "DepotFile":
                     self.files.append(DepotFile(item, depot.product_id))
                 else:
