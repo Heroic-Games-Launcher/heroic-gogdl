@@ -29,6 +29,7 @@ class Manager:
         self.should_append_folder_name = generic_manager.should_append_folder_name
         self.is_verifying = generic_manager.is_verifying
 
+        self.builds = generic_manager.builds
         self.build = generic_manager.target_build
         self.version_name = self.build["version_name"]
 
@@ -51,6 +52,7 @@ class Manager:
         self.manifest = v2.Manifest(self.meta, self.lang, dlcs, self.api_handler, False)
 
         download_size, disk_size = self.manifest.calculate_download_size()
+        available_branches = set([build["branch"] for build in self.builds["items"]])
 
         response = {
             "download_size": download_size,
@@ -62,6 +64,7 @@ class Manager:
             "dependencies": self.manifest.dependencies_ids,
             "versionEtag": self.version_etag,
             "versionName": self.version_name,
+            "available_branches": list(available_branches)
         }
         return response
 
@@ -84,9 +87,12 @@ class Manager:
         # Load old manifest
         if os.path.exists(manifest_path):
             with open(manifest_path, 'r') as f_handle:
-                data = f_handle.read()
-                json_data = json.loads(data)
-                old_manifest = v2.Manifest.from_json(json_data, self.api_handler)
+                try:
+                    json_data = json.load(f_handle)
+                    old_manifest = v2.Manifest.from_json(json_data, self.api_handler)
+                except json.JSONDecodeError:
+                    old_manifest = None
+                    pass
 
         if self.is_verifying:
             if old_manifest:

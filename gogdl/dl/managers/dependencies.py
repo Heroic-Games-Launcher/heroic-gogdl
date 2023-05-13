@@ -39,14 +39,14 @@ class DependenciesManager:
 
     def get(self, return_workers=False):
         if self.version == 1:
-            return self.get_v1(return_workers)
+            return self.__get_v1(return_workers)
         elif self.version == 2:
-            return self.get_v2(return_workers)
+            return self.__get_v2(return_workers)
 
-    def get_v1(self, return_workers):
+    def __get_v1(self, return_workers):
         pass
 
-    def get_v2(self, return_workers):
+    def __get_v2(self, return_workers):
         depots = []
         if not self.ids:
             return []
