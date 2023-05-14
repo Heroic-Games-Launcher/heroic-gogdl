@@ -57,7 +57,7 @@ class Manager:
         self.manifest = v1.Manifest(self.meta, self.lang, dlcs, self.api_handler, False)
 
         download_size, disk_size = self.manifest.calculate_download_size()
-        available_branches = set([build["branch"]] for build in self.builds["items"])
+        available_branches = set([build["branch"] for build in self.builds["items"]])
 
         response = {
             "download_size": download_size,
@@ -73,3 +73,27 @@ class Manager:
         }
         return response
 
+
+    def get_dlcs_user_owns(self, info_command=False, requested_dlcs=None):
+        if requested_dlcs is None:
+            requested_dlcs = list()
+        if not self.dlcs_should_be_downloaded and not info_command:
+            return []
+        self.logger.debug("Getting dlcs user owns")
+        dlcs = []
+        if len(requested_dlcs) > 0:
+            for product in self.meta["product"]["gameIDs"]:
+                if (
+                        product["gameID"] != self.game_id # Check if not base game
+                        and product["gameID"] in requested_dlcs # Check if requested by user
+                        and self.api_handler.does_user_own(product["gameID"]) # Check if owned
+                ):
+                    dlcs.append({"title": product["name"]["en"], "id": product["gameID"]})
+            return dlcs
+        for product in self.meta["product"]["gameIDs"]:
+            # Check if not base game and if owned
+            if product["gameID"] != self.game_id and self.api_handler.does_user_own(
+                    product["gameID"]
+            ):
+                dlcs.append({"title": product["name"]["en"], "id": product["gameID"]})
+        return dlcs

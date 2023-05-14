@@ -8,7 +8,7 @@ class Depot:
         self.target_lang = target_lang
         self.languages = depot_data["languages"]
         self.game_ids = depot_data["gameIDs"]
-        self.size = depot_data["size"]
+        self.size = int(depot_data["size"])
         self.manifest = depot_data["manifest"]
 
     def check_language(self):
@@ -47,8 +47,9 @@ class Manifest:
         self.product_id = meta["product"]["rootGameID"]
         self.dlcs = dlcs
         self.dlc_only = dlcs
+        self.all_depots = [] 
         self.depots = self.parse_depots(language, meta["product"]["depots"])
-        self.dependencies_ids = [game["gameID"] for game in meta["product"]["gameIDs"] if not game["standalone"]]
+        self.dependencies_ids = [depot['redist'] for depot in meta["product"]["depots"] if depot.get('redist')]
 
         self.api_handler = api_handler
 
@@ -72,13 +73,15 @@ class Manifest:
             
             for g_id in depot["gameIDs"]:
                 if g_id in dlc_ids or (not self.dlc_only and self.product_id == g_id):
-                    parsed.append(Depot(language, depot))
+                    new_depot = Depot(language, depot)
+                    parsed.append(new_depot)
+                    self.all_depots.append(new_depot)
                     break
         return list(filter(lambda x: x.check_language(), parsed))
 
     def list_languages(self):
         languages_dict = set()
-        for depot in self.depots:
+        for depot in self.all_depots:
             for language in depot.languages:
                 if language != "Neutral":
                     languages_dict.add(language)

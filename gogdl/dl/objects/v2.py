@@ -55,6 +55,7 @@ class Manifest:
         self.product_id = meta["baseProductId"]
         self.dlcs = dlcs
         self.dlc_only = dlc_only
+        self.all_depots = []
         self.depots = self.parse_depots(language, meta["depots"])
         self.dependencies_ids = meta.get("dependencies")
         if not self.dependencies_ids:
@@ -81,13 +82,16 @@ class Manifest:
             if depot["productId"] in dlc_ids or (
                     not self.dlc_only and self.product_id == depot["productId"]
             ):
-                parsed.append(Depot(language, depot))
+                new_depot = Depot(language, depot)
+                parsed.append(new_depot)
+                self.all_depots.append(new_depot)
+                
 
         return list(filter(lambda x: x.check_language(), parsed))
 
     def list_languages(self):
         languages_dict = set()
-        for depot in self.depots:
+        for depot in self.all_depots:
             for language in depot.languages:
                 if language != "*":
                     languages_dict.add(language)

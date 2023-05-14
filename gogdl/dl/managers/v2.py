@@ -107,7 +107,7 @@ class Manager:
 
         self.logger.info(diff)
 
-        dependencies_manager = dependencies.DependenciesManager(self.manifest.dependencies_ids, self.path, 2,
+        dependencies_manager = dependencies.DependenciesManager(self.manifest.dependencies_ids, self.path,
                                                                 self.arguments.workers_count, self.api_handler, True)
 
         secure_link_endpoints_ids = [product["id"] for product in dlcs_user_owns]

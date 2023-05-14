@@ -69,13 +69,18 @@ class Manager:
             self.download_manager = linux.Manager(self)
 
             return
+        
 
-        if not self.galaxy_api_data["content_system_compatibility"][self.platform]:
-            self.logger.error("Game doesn't support content system api, unable to proceed")
+        if not self.galaxy_api_data["content_system_compatibility"].get(self.platform):
+            self.logger.error("Game doesn't support content system api, unable to proceed using platfrom " + self.platform)
             exit(1)
 
+        # If Linux download ever progresses to this point, then it's time for some good party
         self.builds = self.get_builds()
 
+        if len(self.builds["items"]) == 0:
+            self.logger.error("No builds found") 
+            exit(1)
         self.target_build = self.builds["items"][0]
 
         for build in self.builds["items"]:
@@ -92,6 +97,8 @@ class Manager:
 
         generation = self.target_build["generation"]
 
+        # This code shouldn't run at all but it's here just in case GOG decides they will return different generation than requested one
+        # Of course assuming they will ever change their content system generation (I highly doubt they will)
         if generation not in [1, 2]:
             raise Exception("Unsupported depot version please report this")
 
