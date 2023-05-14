@@ -3,15 +3,15 @@ from multiprocessing import Pool
 
 from gogdl.dl import dl_utils
 import gogdl.constants as constants
-from gogdl.dl.objects import v2, v1
+from gogdl.dl.objects import v2
 from gogdl.dl.workers import v2 as v2_worker
 
 
 def get_depot_list(manifest, product_id=None):
     download_list = list()
-    for item in manifest['depot']['items']:
+    for item in manifest["depot"]["items"]:
         obj = None
-        if item['type'] == 'DepotFile':
+        if item["type"] == "DepotFile":
             obj = v2.DepotFile(item, product_id)
         else:
             obj = v2.DepotDirectory(item)
@@ -23,37 +23,38 @@ def run_process(worker):
     worker.work()
 
 
+# Looks like we can use V2 dependencies for V1 games too WOAH
+# We are doing that obviously 
 class DependenciesManager:
-    def __init__(self, ids, path, generation, workers_count, api_handler, download_game_deps_only=False):
+    def __init__(
+        self, ids, path, workers_count, api_handler, download_game_deps_only=False
+    ):
         self.api = api_handler
 
         self.logger = logging.getLogger("REDIST")
 
         self.path = path
-        self.version = int(generation)
         self.workers_count = int(workers_count)
-        self.repository = self.api.get_dependencies_list(depot_version=self.version)
+        self.repository = self.api.get_dependencies_list()
 
         self.ids = ids
         self.download_game_deps_only = download_game_deps_only  # Basically skip all redist with path starting with __redist
 
     def get(self, return_workers=False):
-        if self.version == 1:
-            return self.__get_v1(return_workers)
-        elif self.version == 2:
-            return self.__get_v2(return_workers)
-
-    def __get_v1(self, return_workers):
-        pass
-
-    def __get_v2(self, return_workers):
         depots = []
         if not self.ids:
             return []
 
         for depot in self.repository[0]["depots"]:
             if depot["dependencyId"] in self.ids:
+                # By default we want to download all redist beginning with redist (game installation runs installation of the game's ones)
+                # True if it's global redist
+                # False if it's scoped to game dir
                 should_download = depot["executable"]["path"].startswith("__redist")
+                
+                # If we want to download redist located in game dir we flip the boolean
+                # False if it's global redist
+                # True if it's scoped to game dir
                 if self.download_game_deps_only:
                     should_download = not should_download
 
