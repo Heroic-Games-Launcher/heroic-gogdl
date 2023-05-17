@@ -25,7 +25,7 @@ class Manager:
         self.build = generic_manager.target_build
         self.version_name = self.build["version_name"]
 
-        self.lang = self.arguments.lang
+        self.lang = self.arguments.lang or "English"
         self.dlcs_should_be_downloaded = self.arguments.dlcs
         if self.arguments.dlcs_list:
             self.dlcs_list = self.arguments.dlcs_list.split(",")
@@ -56,12 +56,14 @@ class Manager:
         dlcs = self.get_dlcs_user_owns(True)
         self.manifest = v1.Manifest(self.meta, self.lang, dlcs, self.api_handler, False)
 
-        download_size, disk_size = self.manifest.calculate_download_size()
+        size_data = self.manifest.calculate_download_size()
         available_branches = set([build["branch"] for build in self.builds["items"]])
 
+        for dlc in dlcs:
+            dlc.update({"size": size_data[dlc["id"]]})
+
         response = {
-            "download_size": download_size,
-            "disk_size": disk_size,
+            "size": size_data[self.game_id],
             "dlcs": dlcs,
             "buildId": self.build["legacy_build_id"],
             "languages": self.manifest.list_languages(),

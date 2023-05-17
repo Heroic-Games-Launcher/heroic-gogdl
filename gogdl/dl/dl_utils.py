@@ -151,33 +151,3 @@ def get_range_header(offset, size):
     from_value = offset
     to_value = (int(offset) + int(size)) - 1
     return f"bytes={from_value}-{to_value}"
-
-
-def case_fold(files):
-    prepared_files = [f for f in files]
-
-    for i in range(len(prepared_files)):
-        for y in range(len(prepared_files[i:])):
-            if y == 0:
-                continue
-
-            path1 = prepared_files[i]
-            path2 = prepared_files[i + y]
-
-            split_path1 = path1.split(os.sep)
-            split_path2 = path2.split(os.sep)
-            if len(split_path1) == 1 or len(split_path2) == 1:
-                continue
-            common_part = os.path.commonpath([path1.lower(), path2.lower()]).split(os.sep)
-            common_part_len = len(common_part)
-
-            if common_part_len == 0 or not common_part[0]:
-                continue
-
-            for x in range(common_part_len):
-                split_path2[x] = split_path1[x]
-
-            prepared_files[i] = os.sep.join(split_path1)
-            prepared_files[i + y] = os.sep.join(split_path2)
-
-    return prepared_files
