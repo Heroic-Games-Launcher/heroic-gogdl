@@ -89,12 +89,21 @@ class Manifest:
         return list(languages_dict)
 
     def calculate_download_size(self):
-        download_size = 0
+        data = dict()
 
-        for depot in self.depots:
-            download_size += depot.size
+        for depot in self.all_depots:
+            for product_id in depot.game_ids:
+                if not product_id in data:
+                    data[product_id] = dict()
+                product_data = data[product_id]
+                for lang in depot.languages:
+                    if not lang in product_data:
+                        product_data[lang] = {"download_size": 0, "disk_size": 0}
+                    
+                    product_data[lang]["download_size"] += depot.size
+                    product_data[lang]["disk_size"] += depot.size
         
-        return download_size, download_size
+        return data 
 
     
     def get_files(self):

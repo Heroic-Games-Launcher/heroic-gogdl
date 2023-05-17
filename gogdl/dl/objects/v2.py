@@ -99,14 +99,20 @@ class Manifest:
         return list(languages_dict)
 
     def calculate_download_size(self):
-        download_size = 0
-        disk_size = 0
+        data = dict()
 
-        for depot in self.depots:
-            download_size += depot.compressed_size
-            disk_size += depot.size
+        for depot in self.all_depots:
+            if not depot.product_id in data:
+                data[depot.product_id] = dict()
+            product_data = data[depot.product_id]
+            for lang in depot.languages:
+                if not lang in product_data:
+                    product_data[lang] = {"download_size":0, "disk_size":0} 
+                
+                product_data[lang]["download_size"] += depot.compressed_size
+                product_data[lang]["disk_size"] += depot.size
 
-        return download_size, disk_size
+        return data 
 
     def get_files(self):
         for depot in self.depots:
@@ -119,26 +125,6 @@ class Manifest:
                     self.files.append(DepotFile(item, depot.product_id))
                 else:
                     self.dirs.append(DepotDirectory(item))
-
-        # self.__normalize_file_paths()
-
-    def __normalize_file_paths(self):
-        if sys.platform == 'win32':
-            # We don't need to do that on windows, since it has case-folding by default
-            return
-
-        dir_paths = [directory.path for directory in self.dirs]
-        file_paths = [file.path for file in self.files]
-
-        case_folded_dirs = dl_utils.case_fold(dir_paths)
-        case_folded_files = dl_utils.case_fold(file_paths)
-
-        for i in range(len(self.dirs)):
-            self.dirs[i].path = case_folded_dirs[i]
-
-        for i in range(len(self.files)):
-            self.files[i].path = case_folded_files[i]
-
 
 class FileDiff:
     def __init__(self):

@@ -87,6 +87,7 @@ def init_parser():
     )
     download_parser.add_argument("--branch", help="Choose build branch to use")
     download_parser.add_argument("--password", help="Password to access other branches")
+    download_parser.add_argument("--force-gen", choices=["1", "2"], dest="force_generation", help="Force specific manifest generation (FOR DEBUGGING)")
     download_parser.add_argument(
         "--max-workers",
         dest="workers_count",
@@ -131,6 +132,7 @@ def init_parser():
     calculate_size_parser.add_argument("--lang", "-l", help="Specify game language")
     calculate_size_parser.add_argument("--branch", help="Choose build branch to use")
     calculate_size_parser.add_argument("--password", help="Password to access other branches")
+    calculate_size_parser.add_argument("--force-gen", choices=["1", "2"], dest="force_generation", help="Force specific manifest generation (FOR DEBUGGING)")
     calculate_size_parser.add_argument(
         "--max-workers",
         dest="workers_count",

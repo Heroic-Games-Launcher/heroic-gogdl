@@ -36,8 +36,9 @@ class Manager:
         if self.platform == 'linux':
             build_platform = 'windows'
         password = '' if not self.arguments.password else '&' + self.arguments.password
+        generation = self.arguments.force_generation or "2"
         response = self.api_handler.session.get(
-            f"{constants.GOG_CONTENT_SYSTEM}/products/{self.game_id}/os/{build_platform}/builds?&generation=2{password}"
+            f"{constants.GOG_CONTENT_SYSTEM}/products/{self.game_id}/os/{build_platform}/builds?&generation={generation}{password}"
         )
 
         if not response.ok:
