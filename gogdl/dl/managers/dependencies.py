@@ -48,13 +48,9 @@ class DependenciesManager:
         for depot in self.repository[0]["depots"]:
             if depot["dependencyId"] in self.ids:
                 # By default we want to download all redist beginning with redist (game installation runs installation of the game's ones)
-                # True if it's global redist
-                # False if it's scoped to game dir
                 should_download = depot["executable"]["path"].startswith("__redist")
                 
                 # If we want to download redist located in game dir we flip the boolean
-                # False if it's global redist
-                # True if it's scoped to game dir
                 if self.download_game_deps_only:
                     should_download = not should_download
 

@@ -50,7 +50,7 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&type=depot&path={path}"
 
     try:
-        r = requests.get(url, headers=api_handler.session.headers, timeout=1)
+        r = requests.get(url, headers=api_handler.session.headers, timeout=5)
     except BaseException as exception:
         logger.info(exception)
         time.sleep(0.2)
@@ -63,17 +63,7 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
 
     js = r.json()
 
-    endpoint = classify_cdns(js["urls"], generation)
-    url_format = endpoint["url_format"]
-    parameters = endpoint["parameters"]
-    if generation == 1:
-        if parameters.get("path"):
-            parameters["path"] = parameters["path"] + "/main.bin"
-
-        return merge_url_with_params(url_format, parameters)
-
-    return endpoint
-
+    return js['urls']
 
 def get_dependency_link(api_handler):
     data = get_json(
