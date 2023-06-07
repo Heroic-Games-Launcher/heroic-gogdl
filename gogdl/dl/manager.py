@@ -192,7 +192,6 @@ class DownloadManager:
                     or self.dlcs_should_be_downloaded
                     and (depot["productId"] in owned_dlcs)
                 ):
-                    # TODO: Respect user language
                     newObject = objects.Depot(self.lang, depot)
                     if newObject.check_language():
                         collected_depots.append(newObject)
@@ -326,7 +325,6 @@ class DownloadManager:
                 self.cancelled = True
                 break
 
-        # TODO: Get game icon, for shortcuts
         self.progress.completed = True
         return not self.cancelled
 

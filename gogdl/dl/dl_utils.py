@@ -68,17 +68,7 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
 
     js = r.json()
 
-    endpoint = classify_cdns(js["urls"], generation)
-    url_format = endpoint["url_format"]
-    parameters = endpoint["parameters"]
-    if generation == 1:
-        if parameters.get("path"):
-            parameters["path"] = parameters["path"] + "/main.bin"
-
-        return merge_url_with_params(url_format, parameters)
-
-    return endpoint
-
+    return js['urls']
 
 def get_dependency_link(api_handler):
     data = get_json(
