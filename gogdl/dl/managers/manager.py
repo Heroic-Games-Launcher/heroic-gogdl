@@ -33,8 +33,6 @@ class Manager:
 
     def get_builds(self):
         build_platform = self.platform
-        if self.platform == 'linux':
-            build_platform = 'windows'
         password = '' if not self.arguments.password else '&' + self.arguments.password
         generation = self.arguments.force_generation or "2"
         response = self.api_handler.session.get(

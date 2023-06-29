@@ -66,7 +66,7 @@ class DependenciesManager:
 
             files += get_depot_list(manifest)
 
-        secure_link = dl_utils.get_dependency_link(self.api)
+        secure_link = dl_utils.get_dependency_link(self.api) # This should never expire
 
         workers = list()
 
