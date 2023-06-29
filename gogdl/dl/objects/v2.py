@@ -9,9 +9,9 @@ from gogdl import constants
 
 class DepotFile:
     def __init__(self, item_data, product_id):
+        self.flags = item_data.get("flags")
         self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep)
         self.chunks = item_data["chunks"]
-        self.flags = item_data.get("flags")
         self.md5 = item_data.get("md5")
         self.sha256 = item_data.get("sha256")
         self.product_id = product_id
@@ -134,8 +134,8 @@ class FileDiff:
     def compare(cls, new, old):
         diff = cls()
 
-        old_offset = 0
         for new_chunk in new.chunks:
+            old_offset = 0
             for old_chunk in old.chunks:
                 if old_chunk["md5"] == new_chunk["md5"]:
                     new_chunk["old_offset"] = old_offset
@@ -175,11 +175,13 @@ class ManifestDiff:
             if not old_file:
                 comparison.new.append(new_file)
             else:
-                if len(new_file.chunks) == 1:
+                if len(new_file.chunks) == 1 and len(old_file.chunks) == 1:
                     if new_file.chunks[0]["md5"] != old_file.chunks[0]["md5"]:
                         comparison.changed.append(new_file)
                 else:
-                    if new_file.md5 != old_file.md5:
+                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 != new_file.sha256):
+                        comparison.changed.append(FileDiff.compare(new_file, old_file))
+                    elif len(new_file.chunks) != len(old_file.chunks):
                         comparison.changed.append(FileDiff.compare(new_file, old_file))
         return comparison
 

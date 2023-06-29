@@ -1,4 +1,3 @@
-import queue
 import os
 import requests
 import zlib
@@ -7,6 +6,7 @@ from copy import copy
 from gogdl.dl import dl_utils
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Optional
 from multiprocessing import Process, Queue
 
 
@@ -14,6 +14,7 @@ class TaskType(Enum):
     EXIT = 0
     DOWNLOAD = auto()
     ASSEMBLE = auto()
+    EXTRACT = auto()
     CREATE = auto()
 
 
@@ -30,6 +31,7 @@ class FailReason(Enum):
 class Task:
     type: TaskType
     product_id: str
+    flags: Optional[list] 
 
 
 @dataclass
@@ -39,13 +41,14 @@ class DownloadTask(Task):
     destination: str
     file_path: str
     decompress_while_downloading: bool
+    dependency: bool
 
 
 @dataclass
 class WriterTask(Task):
     destination: str
     file_path: str
-    number_of_chunks: int
+    context: any
 
 
 @dataclass
@@ -81,6 +84,16 @@ class Download(Process):
 
             compressed_md5 = task.chunk_data["compressedMd5"]
             md5 = task.chunk_data["md5"]
+
+            if os.path.exists(destination):
+                file_handle = open(destination, "rb")
+                test_md5 = hashlib.md5(file_handle.read())
+                file_handle.close()
+
+                if test_md5.hexdigest() == md5:
+                    self.results_queue.put(TaskResult(True, None, task))
+                    continue
+                
 
             file_handle = open(destination, "wb")
 
@@ -145,42 +158,72 @@ class Writer(Process):
             if task.type == TaskType.EXIT:
                 break
 
+            if task.type == TaskType.EXTRACT:
+                index, chunk = task.context
+                source = os.path.join(task.destination, task.file_path)
+                target = source + f".tmp{index}" 
+
+                file_handle = open(source, "rb")
+                destination_handle = open(target, "wb")
+                file_handle.seek(chunk['old_offset'])
+                data = file_handle.read(chunk['size'])
+                md5 = chunk['md5']
+                calculated = hashlib.md5(data).hexdigest()
+                valid = md5 == calculated
+                
+                if not valid:
+                    # Handle invalid chunk
+                    print("Failed to read chunk", md5, calculated)
+                    self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task))
+                    continue
+                
+                destination_handle.write(data)
+
+                destination_handle.close()
+                file_handle.close()
+                self.results_queue.put(TaskResult(True, None, task))
+                continue
+
+
             destination = os.path.join(task.destination, task.file_path)
             dl_utils.prepare_location(os.path.split(destination)[0])
 
-            if task.number_of_chunks == 0:
+            if task.type == TaskType.CREATE:
                 if not os.path.exists(destination):
                     open(destination, "x").close()
                 self.results_queue.put(TaskResult(True, None, task))
                 continue
             
-            for i in range(task.number_of_chunks):
+            for i in range(task.context[0]):
                 if not os.path.exists(destination+f".tmp{i}"):
                     # This shouldn't happen
-                    # This should be somehow handled
                     print(f"Unable to put chunks together, file {i} is missing")
                     self.results_queue.put(TaskResult(False, FailReason.MISSING_CHUNK, task, i))
                     continue
 
-            if task.number_of_chunks == 1:
+            # Number of chunks
+            if task.context[0] == 1:
                 os.rename(destination+f".tmp0",destination)
                 self.results_queue.put(TaskResult(True, None, task))
                 continue
             
-            if os.path.exists(destination):
+            # Whether it's patching
+            if not task.context[1] and os.path.exists(destination):
                 os.remove(destination)
             
-            file_handle = open(destination, "ab")
+            handle_path = destination
+            # Complex patching boolean
+            if task.context[1]:
+                handle_path = destination+".new"
+            file_handle = open(handle_path, "wb")
 
-            for i in range(task.number_of_chunks):
+            for i in range(task.context[0]):
                 reader = open(destination+f".tmp{i}", "rb")
-                # We can safely load this into memory since chunks are arround 100 MB
-                # And there are up to 2 writer processes atm
-                buffer = reader.read()
+                data = reader.read()
                 reader.close()
                 os.remove(destination+f".tmp{i}")
-                file_handle.write(buffer)
+                file_handle.write(data)
 
             file_handle.close()
-
+                
             self.results_queue.put(TaskResult(True, None, task))
