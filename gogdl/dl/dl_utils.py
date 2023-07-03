@@ -70,8 +70,7 @@ def get_dependency_link(api_handler):
         api_handler,
         f"{constants.GOG_CONTENT_SYSTEM}/open_link?generation=2&_version=2&path=/dependencies/store/",
     )
-    endpoint = classify_cdns(data["urls"])
-    return endpoint
+    return data["urls"]
 
 
 def merge_url_with_params(url, parameters):
@@ -84,20 +83,6 @@ def merge_url_with_params(url, parameters):
 
 def parent_dir(path: str):
     return os.path.split(path)[0]
-
-
-def classify_cdns(cdns, generation=2):
-    best = None
-    for cdn in cdns:
-        if generation not in cdn["supports_generation"]:
-            continue
-        if not best:
-            best = cdn
-        else:
-            if best["priority"] < cdn["priority"]:
-                best = cdn
-
-    return best
 
 
 def calculate_sum(path, function, read_speed_function=None):

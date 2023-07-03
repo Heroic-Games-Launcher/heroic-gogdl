@@ -40,7 +40,7 @@ class DependenciesManager:
         self.ids = ids
         self.download_game_deps_only = download_game_deps_only  # Basically skip all redist with path starting with __redist
 
-    def get(self, return_workers=False):
+    def get(self, return_files=False):
         depots = []
         if not self.ids:
             return []
@@ -66,6 +66,10 @@ class DependenciesManager:
 
             files += get_depot_list(manifest)
 
+
+        if return_files:
+            return files
+
         secure_link = dl_utils.get_dependency_link(self.api) # This should never expire
 
         workers = list()
@@ -75,8 +79,6 @@ class DependenciesManager:
             worker.is_dependency = True
             workers.append(worker)
 
-        if return_workers:
-            return workers
 
         pool = Pool(self.workers_count)
 

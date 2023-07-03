@@ -9,8 +9,8 @@ from gogdl import constants
 
 class DepotFile:
     def __init__(self, item_data, product_id):
-        self.flags = item_data.get("flags")
-        self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep)
+        self.flags = item_data.get("flags") or list()
+        self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep).lstrip(os.sep)
         self.chunks = item_data["chunks"]
         self.md5 = item_data.get("md5")
         self.sha256 = item_data.get("sha256")
@@ -149,6 +149,7 @@ class ManifestDiff:
         self.deleted = []
         self.new = []
         self.changed = []
+        self.redist = []
 
     @classmethod
     def compare(cls, manifest, old_manifest=None):
