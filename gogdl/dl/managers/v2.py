@@ -133,7 +133,15 @@ class Manager:
                     )
                 }
             )
-        dependency_tasks = dependencies_manager.get(True)
+
+        diff.redist = dependencies_manager.get(True)
+
+        if len(diff.redist) > 0:
+            secure_links.update(
+                {
+                    'redist': dl_utils.get_dependency_link(self.api_handler)
+                }
+            )
         
 
         # Queues
@@ -151,7 +159,7 @@ class Manager:
         # Remove all deleted files from diff
         [os.remove(os.path.join(self.path, f.path)) for f in diff.deleted if os.path.exists(os.path.join(self.path, f.path))]
 
-        # Dict storing the tuple (number_of_chunks, ready_chunks, patch_file)
+        # Dict storing the tuple (number_of_chunks, ready_chunks, complex_patching)
         state: dict[str, tuple[int, list[int], bool]] = dict()
 
         task_results_processor = Thread(target=self.process_task_results, args=(state, diff, shared_secure_links, download_queue, writer_queue, download_res_queue))
@@ -160,9 +168,18 @@ class Manager:
         allowed_downloaders = max(self.allowed_threads - 2, 1)
         allowed_writers = min(allowed_downloaders, 2)
 
+        for f in diff.redist:
+            if len(f.chunks) == 0:
+                writer_queue.put(task_executor.WriterTask(task_executor.TaskType.CREATE, 'redist', f.flags, self.path, f.path, None))
+                continue
+            for i, chunk in enumerate(f.chunks):
+                new_task = task_executor.DownloadTask(task_executor.TaskType.DOWNLOAD, 'redist', f.flags, i, chunk, self.path, f.path, True, True)
+                download_queue.put(new_task)
+
         for f in diff.new:
             if len(f.chunks) == 0:
                 writer_queue.put(task_executor.WriterTask(task_executor.TaskType.CREATE, f.product_id, f.flags, self.path, f.path, None))
+                continue
             joined_path = os.path.join(self.path, f.path)
             if os.path.exists(joined_path) and len(f.chunks) > 0:
                 md5 = hashlib.md5()
@@ -215,8 +232,8 @@ class Manager:
         writer_results_processor.join()
         task_results_processor.join()
         
-        [download_queue.put(task_executor.DownloadTask(task_executor.TaskType.EXIT, None, None, None, None, None, False, False)) for worker in download_workers]
-        [writer_queue.put(task_executor.DownloadTask(task_executor.TaskType.EXIT, None, None, None, None, None, False, False)) for worker in writer_workers]
+        [download_queue.put(task_executor.DownloadTask(task_executor.TaskType.EXIT, None, None, None, None, None, None, False, False)) for worker in download_workers]
+        [writer_queue.put(task_executor.DownloadTask(task_executor.TaskType.EXIT, None, None, None, None, None, None, False, False)) for worker in writer_workers]
 
         [worker.join() for worker in download_workers]
         [worker.join() for worker in writer_workers]
@@ -378,12 +395,12 @@ class Manager:
                         os.rename(new_file, destination)
 
             finished += 1
-            if finished == len(diff.new) + len(diff.changed):
+            if finished == len(diff.new) + len(diff.changed) + len(diff.redist):
                 self.stop_all_threads = True
                 break
 
     
-    def update_download_state(self, diff, state: dict[str, tuple[int, list[int], bool]], file_path: str, index: int):
+    def update_download_state(self, diff: v2.ManifestDiff, state: dict[str, tuple[int, list[int], bool]], file_path: str, index: int):
         if state.get(file_path): 
             state[file_path][1].append(index)
             return True, state[file_path][2]
@@ -393,6 +410,11 @@ class Manager:
                 if f.path == file_path:
                     found = f
                     break
+            if not found:
+                for f in diff.redist:
+                    if f.path == file_path:
+                        found = f
+                        break
             if not found:
                 for f in diff.changed:
                     if type(f) == v2.DepotFile:

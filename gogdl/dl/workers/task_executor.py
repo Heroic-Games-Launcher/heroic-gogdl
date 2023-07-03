@@ -1,4 +1,6 @@
 import os
+import sys
+import stat
 import requests
 import zlib
 import hashlib
@@ -97,11 +99,16 @@ class Download(Process):
 
             file_handle = open(destination, "wb")
 
+
             endpoint = copy(urls[0])
-            endpoint["parameters"]["path"] += f"/{dl_utils.galaxy_path(compressed_md5)}"
-            url = dl_utils.merge_url_with_params(
-                endpoint["url_format"], endpoint["parameters"]
-            )
+            if not task.dependency:
+                endpoint["parameters"]["path"] += f"/{dl_utils.galaxy_path(compressed_md5)}"
+                url = dl_utils.merge_url_with_params(
+                    endpoint["url_format"], endpoint["parameters"]
+                )
+            else:
+                endpoint["url"] += "/" + dl_utils.galaxy_path(compressed_md5)
+                url = endpoint["url"]
 
             try:
                 response = self.session.get(url, stream=True, timeout=10)
@@ -204,6 +211,10 @@ class Writer(Process):
             # Number of chunks
             if task.context[0] == 1:
                 os.rename(destination+f".tmp0",destination)
+
+                if "executable" in task.flags and sys.platform != 'win32':
+                    mode = os.stat(destination).st_mode
+                    os.chmod(destination, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
                 self.results_queue.put(TaskResult(True, None, task))
                 continue
             
@@ -225,5 +236,9 @@ class Writer(Process):
                 file_handle.write(data)
 
             file_handle.close()
+
+            if "executable" in task.flags and sys.platform != 'win32':
+                mode = os.stat(handle_path).st_mode
+                os.chmod(handle_path, mode & stat.S_IEXEC & stat.S_IXUSR & stat.S_IXGRP)
                 
             self.results_queue.put(TaskResult(True, None, task))
