@@ -1,9 +1,8 @@
 import json
-import sys
 import os
-import time
 
 from gogdl.dl import dl_utils
+from gogdl.dl.objects import generic, v1
 from gogdl import constants
 
 
@@ -144,12 +143,9 @@ class FileDiff:
         return diff
 
 
-class ManifestDiff:
+class ManifestDiff(generic.BaseDiff):
     def __init__(self):
-        self.deleted = []
-        self.new = []
-        self.changed = []
-        self.redist = []
+        super().__init__()
 
     @classmethod
     def compare(cls, manifest, old_manifest=None):
@@ -170,6 +166,10 @@ class ManifestDiff:
         for old_file in old_files.values():
             if not new_files.get(old_file.path):
                 comparison.deleted.append(old_file)
+
+        if type(old_manifest) == v1.Manifest:
+            comparison.new = manifest.files
+            return comparison
 
         for new_file in new_files.values():
             old_file = old_files.get(new_file.path)

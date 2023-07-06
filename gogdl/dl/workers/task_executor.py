@@ -8,7 +8,6 @@ from copy import copy
 from gogdl.dl import dl_utils
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional
 from multiprocessing import Process, Queue
 
 
@@ -33,7 +32,7 @@ class FailReason(Enum):
 class Task:
     type: TaskType
     product_id: str
-    flags: Optional[list] 
+    flags: list 
 
 
 @dataclass
@@ -67,10 +66,11 @@ class Download(Process):
         self.results_queue: Queue = results_queue
         self.secure_links: dict = shared_secure_links
         self.session = requests.session()
+        self.early_exit = False
         super().__init__()
 
     def run(self):
-        while True:
+        while not self.early_exit:
             task: DownloadTask = self.download_queue.get()
 
             if task.type == TaskType.EXIT:
@@ -145,7 +145,6 @@ class Download(Process):
             if compressed_sum.hexdigest() != compressed_md5 or (
                 task.decompress_while_downloading and final_sum.hexdigest() != md5
             ):
-                print("Invalid md5 sum")
                 self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task))
                 continue
 
@@ -156,10 +155,11 @@ class Writer(Process):
     def __init__(self, writer_queue, results_queue):
         self.writer_queue: Queue = writer_queue
         self.results_queue: Queue = results_queue
+        self.early_exit = False
         super().__init__()
 
     def run(self):
-        while True:
+        while not self.early_exit:
             task: WriterTask = self.writer_queue.get()
 
             if task.type == TaskType.EXIT:
@@ -208,13 +208,18 @@ class Writer(Process):
                     self.results_queue.put(TaskResult(False, FailReason.MISSING_CHUNK, task, i))
                     continue
 
+            handle_path = destination
+            # Complex patching boolean
+            if task.context[1]:
+                handle_path = destination+".new"
+
             # Number of chunks
             if task.context[0] == 1:
-                os.rename(destination+f".tmp0",destination)
+                os.rename(destination+f".tmp0",handle_path)
 
                 if "executable" in task.flags and sys.platform != 'win32':
-                    mode = os.stat(destination).st_mode
-                    os.chmod(destination, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                    mode = os.stat(handle_path).st_mode
+                    os.chmod(handle_path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
                 self.results_queue.put(TaskResult(True, None, task))
                 continue
             
@@ -222,10 +227,6 @@ class Writer(Process):
             if not task.context[1] and os.path.exists(destination):
                 os.remove(destination)
             
-            handle_path = destination
-            # Complex patching boolean
-            if task.context[1]:
-                handle_path = destination+".new"
             file_handle = open(handle_path, "wb")
 
             for i in range(task.context[0]):
