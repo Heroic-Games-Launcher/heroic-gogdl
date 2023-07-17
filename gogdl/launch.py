@@ -23,15 +23,14 @@ def launch(arguments, unknown_args):
     command = list()
     working_dir = arguments.path
     # If type is a string we know it's a path to start.sh on linux
+    wrapper_arg = arguments.wrapper
+    wrapper = shlex.split(wrapper_arg)
     if type(info) != str:
         if sys.platform != "win32":
-            if arguments.dont_use_wine == True:
-                wrapper_arg = arguments.wrapper
-                wrapper = shlex.split(wrapper_arg)
-            elif arguments.platform != unified_platform[sys.platform]:
+            if not arguments.dont_use_wine and arguments.platform != unified_platform[sys.platform]:
                 if arguments.wine_prefix:
                     envvars["WINEPREFIX"] = arguments.wine_prefix
-                wrapper = [arguments.wine]
+                wrapper.append(arguments.wine)
 
         primary_task = get_preferred_task(info, arguments.preferred_task)
         launch_arguments = primary_task.get("arguments")
@@ -74,8 +73,20 @@ def launch(arguments, unknown_args):
             command.append(info)
 
     command.extend(unknown_args)
+    bundle_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     enviroment = os.environ.copy()
     enviroment.update(envvars)
+    
+    ld_library = enviroment.get("LD_LIBRARY_PATH")
+    if ld_library:
+        splitted = ld_library.split(":")
+        try:
+            splitted.remove(bundle_dir)
+        except ValueError:
+            pass
+        enviroment.update({"LD_LIBRARY_PATH": ":".join(splitted)})
+    
+
     print("Launch command:", command)
     # Handle case sensitive file systems
     if not os.path.exists(working_dir):
