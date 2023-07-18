@@ -17,14 +17,14 @@ def launch(arguments, unknown_args):
     info = load_game_info(arguments.path, arguments.id, arguments.platform)
 
     wrapper = []
+    if arguments.wrapper:
+        wrapper = shlex.split(arguments.wrapper)
     envvars = {}
 
     unified_platform = {"win32": "windows", "darwin": "osx", "linux": "linux"}
     command = list()
     working_dir = arguments.path
     # If type is a string we know it's a path to start.sh on linux
-    wrapper_arg = arguments.wrapper
-    wrapper = shlex.split(wrapper_arg)
     if type(info) != str:
         if sys.platform != "win32":
             if not arguments.dont_use_wine and arguments.platform != unified_platform[sys.platform]:
@@ -66,6 +66,9 @@ def launch(arguments, unknown_args):
             command.append(executable)
         command.extend(launch_arguments)
     else:
+        if len(wrapper) > 0 and wrapper[0] is not None:
+            command.extend(wrapper)
+
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
