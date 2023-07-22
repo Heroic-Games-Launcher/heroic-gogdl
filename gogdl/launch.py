@@ -76,20 +76,20 @@ def launch(arguments, unknown_args):
             command.append(info)
 
     command.extend(unknown_args)
-    bundle_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    enviroment = os.environ.copy()
-    enviroment.update(envvars)
+    environment = os.environ.copy()
+    environment.update(envvars)
     
-    ld_library = enviroment.get("LD_LIBRARY_PATH")
-    if ld_library:
-        splitted = ld_library.split(":")
-        try:
-            splitted.remove(bundle_dir)
-        except ValueError:
-            pass
-        enviroment.update({"LD_LIBRARY_PATH": ":".join(splitted)})
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        bundle_dir = sys._MEIPASS 
+        ld_library = environment.get("LD_LIBRARY_PATH")
+        if ld_library:
+            splitted = ld_library.split(":")
+            try:
+                splitted.remove(bundle_dir)
+            except ValueError:
+                pass
+            environment.update({"LD_LIBRARY_PATH": ":".join(splitted)})
     
-
     print("Launch command:", command)
     # Handle case sensitive file systems
     if not os.path.exists(working_dir):
@@ -104,7 +104,7 @@ def launch(arguments, unknown_args):
         if result == -1:
             print("PR_SET_CHILD_SUBREAPER is not supported by your kernel (Linux 3.4 and above)")
         
-        process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
+        process = subprocess.Popen(command, cwd=working_dir, env=environment)
         process_pid = process.pid
 
         def iterate_processes():
@@ -170,7 +170,7 @@ def launch(arguments, unknown_args):
 
 
     else:
-        process = subprocess.Popen(command, cwd=working_dir, env=enviroment)
+        process = subprocess.Popen(command, cwd=working_dir, env=environment)
         status = process.wait()
 
     sys.exit(status)
