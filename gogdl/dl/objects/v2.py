@@ -185,6 +185,3 @@ class ManifestDiff(generic.BaseDiff):
                     elif len(new_file.chunks) != len(old_file.chunks):
                         comparison.changed.append(FileDiff.compare(new_file, old_file))
         return comparison
-
-    def __str__(self):
-        return f"Deleted: {len(self.deleted)} New: {len(self.new)} Changed: {len(self.changed)}"

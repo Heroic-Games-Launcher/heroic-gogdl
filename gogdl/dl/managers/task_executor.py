@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import hashlib
@@ -5,7 +6,7 @@ from threading import Thread
 from multiprocessing import Queue, Manager as ProcessingManager
 from queue import Empty
 from gogdl.dl.workers import task_executor
-from gogdl.dl.objects import generic, v2
+from gogdl.dl.objects import generic, v2, v1
 
 class ExecutingManager():
     def __init__(self, api_handler, allowed_threads, path, diff, secure_links) -> None:
@@ -15,10 +16,12 @@ class ExecutingManager():
         self.path = path
         self.diff: generic.BaseDiff = diff
         self.secure_links = secure_links
+        self.logger = logging.getLogger("TASK_EXEC")
         
         self.stop_all_threads = False
 
     def setup(self, download_tasks, writer_tasks, writer_results):
+        self.finished = 0
         # Queues
         self.download_queue = Queue()
         self.download_res_queue = Queue()
@@ -53,12 +56,12 @@ class ExecutingManager():
         writer_results_processor.start()
 
         # Spawn workers 
-        for i in range(allowed_downloaders):
+        for _ in range(allowed_downloaders):
             worker = task_executor.Download(self.download_queue, self.download_res_queue, self.shared_secure_links)
             worker.start()
             self.download_workers.append(worker)
         
-        for i in range(allowed_writers):
+        for _ in range(allowed_writers):
             worker = task_executor.Writer(self.writer_queue, self.writer_res_queue)
             worker.start()
             self.writer_workers.append(worker)
@@ -69,8 +72,8 @@ class ExecutingManager():
 
     def shutdown(self, force=False):
         if not force:
-            [self.download_queue.put(task_executor.DownloadTask(task_executor.TaskType.EXIT, None, None, None, None, None, None, False, False)) for worker in self.download_workers]
-            [self.writer_queue.put(task_executor.DownloadTask(task_executor.TaskType.EXIT, None, None, None, None, None, None, False, False)) for worker in self.writer_workers]
+            [self.download_queue.put(task_executor.Task(task_executor.TaskType.EXIT, "", [])) for _ in self.download_workers]
+            [self.writer_queue.put(task_executor.Task(task_executor.TaskType.EXIT, "", [])) for _ in self.writer_workers]
 
             [worker.join() for worker in self.download_workers]
             [worker.join() for worker in self.writer_workers]
@@ -109,7 +112,7 @@ class ExecutingManager():
                     download_queue.put(res.task)
 
                 if res.fail_reason == task_executor.FailReason.UNAUTHORIZED:
-                    last_refreshed_timestamp = refreshed_secure_links_timestamps.get(res.task.product_id)
+                    last_refreshed_timestamp = refreshed_secure_links_timestamps.get(res.task.product_id) or 0
 
                     if last_refreshed_timestamp + duplicate_unauthorized_buffer_time > time.time():
                         download_queue.put(res.task)
@@ -123,21 +126,31 @@ class ExecutingManager():
                 continue
                 
             file_path = res.task.file_path
-            result, compex_patch = self.update_download_state(diff, state, file_path, res.task.chunk_index)
+            chunk_index = 0 if type(res.task) == task_executor.DownloadTask1 else res.task.chunk_index
+            result, compex_patch = self.update_download_state(diff, state, file_path, chunk_index)
             if not result:
                 continue
 
-            if state[file_path][0] <= len(state[file_path][1]):
+            if state[file_path][0] <= len(state[file_path][1]) and type(res.task) != task_executor.DownloadTask1:
                 writer_queue.put(task_executor.WriterTask(task_executor.TaskType.ASSEMBLE, res.task.product_id, res.task.flags, self.path, file_path, (state[file_path][0], compex_patch))) 
+            elif type(res.task) == task_executor.DownloadTask1:
+                self.finished += 1
+
+            if self.finished == len(diff.new) + len(diff.changed) + len(diff.redist):
+                self.stop_all_threads = True
+                break
+                
 
     def process_writer_task_results(self, state: dict[str, tuple[int, list[int], bool]], diff: generic.BaseDiff, download_queue: Queue, writer_queue: Queue, writer_res_queue: Queue):
-        finished = 0
         while True:
-            
-            res: task_executor.TaskResult = writer_res_queue.get()
-
+            try:
+                res: task_executor.TaskResult = writer_res_queue.get(timeout=1)
+            except Empty:
+                if self.stop_all_threads:
+                    break
+                continue
             if not res.success:
-                if res.fail_reason.MISSING_CHUNK:
+                if res.fail_reason == task_executor.FailReason.MISSING_CHUNK:
                     chunk_index = res.context[0]
                     file_path = res.task.file_path 
                     found = None
@@ -156,7 +169,7 @@ class ExecutingManager():
                         continue
                     
                     chunk_data = found.chunks[chunk_index]
-                    new_task = task_executor.DownloadTask(task_executor.TaskType.DOWNLOAD, res.task.product_id, res.task.flags, chunk_index, chunk_data, self.path, file_path, True, False)
+                    new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, res.task.product_id, res.task.flags, chunk_index, chunk_data, self.path, file_path, True, False)
                     download_queue.put(new_task)
                     continue
                 continue
@@ -192,13 +205,13 @@ class ExecutingManager():
                             state[file.file.path] = (state[file.file.path][0], [], state[file.file.path][2])
                             os.remove(new_file)
                             for i, chunk in enumerate(file.file.chunks):
-                                new_task = task_executor.DownloadTask(task_executor.TaskType.DOWNLOAD, file.file.product_id, file.file.flags, i, chunk, self.path,file.file.path, True, False)
+                                new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, file.file.product_id, file.file.flags, i, chunk, self.path,file.file.path, True, False)
                                 download_queue.put(new_task)
                             continue
                         os.rename(new_file, destination)
 
-            finished += 1
-            if finished == len(diff.new) + len(diff.changed) + len(diff.redist):
+            self.finished += 1
+            if self.finished == len(diff.new) + len(diff.changed) + len(diff.redist):
                 self.stop_all_threads = True
                 break
 
@@ -231,6 +244,9 @@ class ExecutingManager():
             if not found:
                 self.logger.warning("Somehow we are downloading file that's not in the manifest")
                 return False, False
+            if type(found) == v1.File:
+                state[file_path] = (1, [0], False)
+                return True, False
             if type(found) == v2.FileDiff:
                 state[file_path] = (len(found.file.chunks), [index], True)
                 return True, True

@@ -95,7 +95,7 @@ class Manager:
             with open(manifest_path, 'r') as f_handle:
                 try:
                     json_data = json.load(f_handle)
-                    old_manifest = v2.Manifest.from_json(json_data, self.api_handler)
+                    old_manifest = dl_utils.create_manifest_class(json_data, self.api_handler)
                 except json.JSONDecodeError:
                     old_manifest = None
                     pass
@@ -131,13 +131,13 @@ class Manager:
             )
 
         
-        diff.redist = dependencies_manager.get(True)
+        diff.redist = dependencies_manager.get(True) or []
 
 
         if len(diff.redist) > 0:
-            self.secure_links.update(
+            secure_links.update(
                 {
-                    'redist': self.dl_utils.get_dependency_link(self.api_handler)
+                    'redist': dl_utils.get_dependency_link(self.api_handler)
                 }
             )
 
@@ -150,7 +150,7 @@ class Manager:
                 writer_tasks.append(task_executor.WriterTask(task_executor.TaskType.CREATE, 'redist', f.flags, self.path, f.path, None))
                 continue
             for i, chunk in enumerate(f.chunks):
-                new_task = task_executor.DownloadTask(task_executor.TaskType.DOWNLOAD, 'redist', f.flags, i, chunk, self.path, f.path, True, True)
+                new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, 'redist', f.flags, i, chunk, self.path, f.path, True)
                 download_tasks.append(new_task)
 
         for f in diff.new:
@@ -169,22 +169,22 @@ class Manager:
                         sha256.update(data)
 
                 if file_md5 and md5.hexdigest() == file_md5 or file_sha256 and sha256.hexdigest() == file_sha256:
-                    writer_results.append(task_executor.TaskResult(True, None, task_executor.WriterTask(task_executor.TaskType.ASSEMBLE, f.product_id, f.flags, self.path, f.path, len(f.chunks))))
+                    writer_results.append(task_executor.TaskResult(True, None, task_executor.WriterTask(task_executor.TaskType.ASSEMBLE, f.product_id, f.flags, self.path, f.path, len(f.chunks)), None))
                     continue
                 
             for i, chunk in enumerate(f.chunks):
-                new_task = task_executor.DownloadTask(task_executor.TaskType.DOWNLOAD, f.product_id, f.flags, i, chunk, self.path, f.path, True, False)
+                new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, f.product_id, f.flags, i, chunk, self.path, f.path, False)
                 download_tasks.append(new_task)
 
         for f in diff.changed:
             if type(f) == v2.DepotFile:
                 for i, chunk in enumerate(f.chunks):
-                    new_task = task_executor.DownloadTask(task_executor.TaskType.DOWNLOAD, f.product_id, f.flags, i, chunk, self.path,f.path, True, False)
+                    new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, f.product_id, f.flags, i, chunk, self.path,f.path, False)
                     download_tasks.append(new_task)
             else:
                 for i, chunk in enumerate(f.file.chunks):
                     if not chunk.get("old_offset"):
-                        new_task = task_executor.DownloadTask(task_executor.TaskType.DOWNLOAD, f.file.product_id, f.file.flags, i, chunk, self.path,f.file.path, True, False)
+                        new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, f.file.product_id, f.file.flags, i, chunk, self.path,f.file.path, False)
                         download_tasks.append(new_task)
                     else:
                         extract_task = task_executor.WriterTask(task_executor.TaskType.EXTRACT, f.file.product_id, f.file.flags, self.path, f.file.path, (i, chunk))
@@ -195,7 +195,7 @@ class Manager:
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, diff, secure_links)
         executor.setup(download_tasks, writer_tasks, writer_results)
         # Remove all deleted files from diff
-        [os.remove(os.path.join(self.path, f.path)) for f in self.diff.deleted if os.path.exists(os.path.join(self.path, f.path))]
+        [os.remove(os.path.join(self.path, f.path)) for f in diff.deleted if os.path.exists(os.path.join(self.path, f.path))]
         executor.run()
         
         dl_utils.prepare_location(manifests_dir)
