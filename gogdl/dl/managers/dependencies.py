@@ -78,7 +78,7 @@ class DependenciesManager:
                 writer_tasks.append(task_executor.WriterTask(task_executor.TaskType.CREATE, 'redist', f.flags, self.path, f.path, None))
                 continue
             for i, chunk in enumerate(f.chunks):
-                new_task = task_executor.DownloadTask(task_executor.TaskType.DOWNLOAD, 'redist', f.flags, i, chunk, self.path, f.path, True, True)
+                new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, 'redist', f.flags, i, chunk, self.path, f.path, True)
                 download_tasks.append(new_task)
 
 

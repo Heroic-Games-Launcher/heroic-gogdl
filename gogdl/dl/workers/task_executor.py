@@ -4,6 +4,7 @@ import stat
 import requests
 import zlib
 import hashlib
+from typing import Any, Optional, Union
 from copy import copy
 from gogdl.dl import dl_utils
 from dataclasses import dataclass
@@ -13,7 +14,8 @@ from multiprocessing import Process, Queue
 
 class TaskType(Enum):
     EXIT = 0
-    DOWNLOAD = auto()
+    DOWNLOAD_V1 = auto()
+    DOWNLOAD_V2 = auto()
     ASSEMBLE = auto()
     EXTRACT = auto()
     CREATE = auto()
@@ -34,14 +36,20 @@ class Task:
     product_id: str
     flags: list 
 
+@dataclass
+class DownloadTask1(Task):
+    size: int
+    offset: int
+    checksum: str
+    destination: str
+    file_path: str
 
 @dataclass
-class DownloadTask(Task):
+class DownloadTask2(Task):
     chunk_index: int
     chunk_data: dict
     destination: str
     file_path: str
-    decompress_while_downloading: bool
     dependency: bool
 
 
@@ -49,15 +57,15 @@ class DownloadTask(Task):
 class WriterTask(Task):
     destination: str
     file_path: str
-    context: any
+    context: Any
 
 
 @dataclass
 class TaskResult:
     success: bool
-    fail_reason: FailReason
-    task: Task
-    context = None
+    fail_reason: Optional[FailReason]
+    task: Union[DownloadTask2, DownloadTask1, WriterTask]
+    context: Any
 
 
 class Download(Process):
@@ -71,85 +79,148 @@ class Download(Process):
 
     def run(self):
         while not self.early_exit:
-            task: DownloadTask = self.download_queue.get()
+            task: Union[DownloadTask1, DownloadTask2] = self.download_queue.get()
 
             if task.type == TaskType.EXIT:
                 break
 
-            destination = os.path.join(
-                task.destination, task.file_path + f".tmp{task.chunk_index}"
-            )
+            if type(task) == DownloadTask2:
+                self.v2(task)
+            elif type(task) == DownloadTask1:
+                self.v1(task)
 
-            dl_utils.prepare_location(os.path.split(destination)[0])
+    def v2(self, task: DownloadTask2):
+        destination = os.path.join(
+            task.destination, task.file_path + f".tmp{task.chunk_index}"
+        )
 
-            urls = self.secure_links[task.product_id]
+        dl_utils.prepare_location(os.path.split(destination)[0])
 
-            compressed_md5 = task.chunk_data["compressedMd5"]
-            md5 = task.chunk_data["md5"]
+        urls = self.secure_links[task.product_id]
 
-            if os.path.exists(destination):
-                file_handle = open(destination, "rb")
-                test_md5 = hashlib.md5(file_handle.read())
-                file_handle.close()
+        compressed_md5 = task.chunk_data["compressedMd5"]
+        md5 = task.chunk_data["md5"]
 
-                if test_md5.hexdigest() == md5:
-                    self.results_queue.put(TaskResult(True, None, task))
-                    continue
-                
-
-            file_handle = open(destination, "wb")
-
-
-            endpoint = copy(urls[0])
-            if not task.dependency:
-                endpoint["parameters"]["path"] += f"/{dl_utils.galaxy_path(compressed_md5)}"
-                url = dl_utils.merge_url_with_params(
-                    endpoint["url_format"], endpoint["parameters"]
-                )
-            else:
-                endpoint["url"] += "/" + dl_utils.galaxy_path(compressed_md5)
-                url = endpoint["url"]
-
-            try:
-                response = self.session.get(url, stream=True, timeout=10)
-                response.raise_for_status()
-            except Exception as e:
-                # Handle exception
-                if response.status_code == 401:
-                    self.results_queue.put(TaskResult(False, FailReason.UNAUTHORIZED, task))
-                    continue
-                self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task))
-                continue
-            decompressor = None
-            compressed_sum = hashlib.md5()
-            final_sum = hashlib.md5()
-            if task.decompress_while_downloading:
-                decompressor = zlib.decompressobj(15)
-            try:
-                for chunk in response.iter_content(1024 * 1024):
-                    compressed_sum.update(chunk)
-                    if decompressor:
-                        data = decompressor.decompress(chunk)
-                        final_sum.update(data)
-                        file_handle.write(data)
-                    else:
-                        file_handle.write(chunk)
-
-            except Exception as e:
-                print("ERROR", e)
-                self.results_queue.put(TaskResult(False, FailReason.UNKNOWN, task))
-                continue 
-
+        if os.path.exists(destination):
+            file_handle = open(destination, "rb")
+            test_md5 = hashlib.md5(file_handle.read())
             file_handle.close()
 
-            if compressed_sum.hexdigest() != compressed_md5 or (
-                task.decompress_while_downloading and final_sum.hexdigest() != md5
-            ):
-                self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task))
-                continue
+            if test_md5.hexdigest() == md5:
+                self.results_queue.put(TaskResult(True, None, task, None))
+                return
+                
 
-            self.results_queue.put(TaskResult(True, None, task))
+        file_handle = open(destination, "wb")
 
+        endpoint = copy(urls[0])
+        if not task.dependency:
+            endpoint["parameters"]["path"] += f"/{dl_utils.galaxy_path(compressed_md5)}"
+            url = dl_utils.merge_url_with_params(
+                endpoint["url_format"], endpoint["parameters"]
+            )
+        else:
+            endpoint["url"] += "/" + dl_utils.galaxy_path(compressed_md5)
+            url = endpoint["url"]
+
+        response = None
+        try:
+            response = self.session.get(url, stream=True, timeout=30)
+            response.raise_for_status()
+        except Exception as e:
+            # Handle exception
+            if response and response.status_code == 401:
+                self.results_queue.put(TaskResult(False, FailReason.UNAUTHORIZED, task, None))
+                return
+            self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task, None))
+            return 
+        compressed_sum = hashlib.md5()
+        final_sum = hashlib.md5()
+        decompressor = zlib.decompressobj(15)
+        try:
+            for chunk in response.iter_content(1024 * 1024):
+                compressed_sum.update(chunk)
+                if decompressor:
+                    data = decompressor.decompress(chunk)
+                    final_sum.update(data)
+                    file_handle.write(data)
+                else:
+                    file_handle.write(chunk)
+
+        except Exception as e:
+            print("ERROR", e)
+            self.results_queue.put(TaskResult(False, FailReason.UNKNOWN, task, None))
+            return 
+
+        file_handle.close()
+
+        if compressed_sum.hexdigest() != compressed_md5 or final_sum.hexdigest() != md5:
+            self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task, None))
+            return 
+
+        self.results_queue.put(TaskResult(True, None, task, None))
+    
+    def v1(self, task: DownloadTask1):
+        destination = os.path.join(
+            task.destination, task.file_path
+        )
+
+        dl_utils.prepare_location(os.path.split(destination)[0])
+
+        urls = self.secure_links[task.product_id]
+
+        md5 = task.checksum
+
+        if os.path.exists(destination):
+            file_handle = open(destination, "rb")
+            test_md5 = hashlib.md5()
+            while chunk := file_handle.read(10 * 1024 * 1024):
+                test_md5.update(chunk)
+            file_handle.close()
+
+            if test_md5.hexdigest() == md5:
+                self.results_queue.put(TaskResult(True, None, task, None))
+                return
+                
+
+        file_handle = open(destination, "wb")
+
+        final_sum = hashlib.md5()
+
+        endpoint = copy(urls[0])
+        response = None
+        endpoint["parameters"]["path"] += "/main.bin"
+        url = dl_utils.merge_url_with_params(
+            endpoint["url_format"], endpoint["parameters"]
+        )
+        range_header = dl_utils.get_range_header(task.offset, task.size)
+        try:
+            response = self.session.get(url, stream=True, timeout=30, headers={'Range': range_header})
+            response.raise_for_status()
+        except Exception as e:
+            # Handle exception
+            if response and response.status_code == 401:
+                self.results_queue.put(TaskResult(False, FailReason.UNAUTHORIZED, task, None))
+                return
+            self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task, None))
+            return 
+
+         
+        try:
+            for chunk in response.iter_content(1024 * 1024):
+                final_sum.update(chunk)
+                file_handle.write(chunk)
+        except Exception as e:
+            print("ERROR", e)
+            self.results_queue.put(TaskResult(False, FailReason.UNKNOWN, task, None))
+            return 
+        file_handle.close()
+
+        if final_sum.hexdigest() != md5:
+            self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task, None))
+            return 
+
+        self.results_queue.put(TaskResult(True, None, task, None))
 
 class Writer(Process):
     def __init__(self, writer_queue, results_queue):
@@ -181,14 +252,14 @@ class Writer(Process):
                 if not valid:
                     # Handle invalid chunk
                     print("Failed to read chunk", md5, calculated)
-                    self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task))
+                    self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task, None))
                     continue
                 
                 destination_handle.write(data)
 
                 destination_handle.close()
                 file_handle.close()
-                self.results_queue.put(TaskResult(True, None, task))
+                self.results_queue.put(TaskResult(True, None, task, None))
                 continue
 
 
@@ -198,7 +269,7 @@ class Writer(Process):
             if task.type == TaskType.CREATE:
                 if not os.path.exists(destination):
                     open(destination, "x").close()
-                self.results_queue.put(TaskResult(True, None, task))
+                self.results_queue.put(TaskResult(True, None, task, None))
                 continue
             
             for i in range(task.context[0]):
@@ -220,7 +291,7 @@ class Writer(Process):
                 if "executable" in task.flags and sys.platform != 'win32':
                     mode = os.stat(handle_path).st_mode
                     os.chmod(handle_path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-                self.results_queue.put(TaskResult(True, None, task))
+                self.results_queue.put(TaskResult(True, None, task, None))
                 continue
             
             # Whether it's patching
@@ -242,4 +313,4 @@ class Writer(Process):
                 mode = os.stat(handle_path).st_mode
                 os.chmod(handle_path, mode & stat.S_IEXEC & stat.S_IXUSR & stat.S_IXGRP)
                 
-            self.results_queue.put(TaskResult(True, None, task))
+            self.results_queue.put(TaskResult(True, None, task, None))

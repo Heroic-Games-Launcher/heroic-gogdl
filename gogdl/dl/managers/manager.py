@@ -71,7 +71,7 @@ class Manager:
         
 
         if not self.galaxy_api_data["content_system_compatibility"].get(self.platform):
-            self.logger.error("Game doesn't support content system api, unable to proceed using platfrom " + self.platform)
+            self.logger.error(f"Game doesn't support content system api, unable to proceed using platfrom {self.platform}")
             exit(1)
 
         # If Linux download ever progresses to this point, then it's time for some good party

@@ -2,6 +2,7 @@ import json
 import zlib
 import os
 import gogdl.constants as constants
+from gogdl.dl.objects import v1, v2
 import shutil
 import time
 import requests
@@ -18,11 +19,9 @@ def get_json(api_handler, url):
     return x.json()
 
 
-def get_zlib_encoded(api_handler, url, logger=None):
-    r = requests.get(url, headers=api_handler.session.headers, timeout=TIMEOUT)
-    if r.status_code != 200:
-        if logger:
-            logger.info("zlib response != 200")
+def get_zlib_encoded(api_handler, url):
+    x = api_handler.session.get(url, timeout=TIMEOUT)
+    if not x.ok:
         return
     try:
         decompressed = json.loads(zlib.decompress(r.content, 15))
@@ -57,12 +56,14 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
     try:
         r = requests.get(url, headers=api_handler.session.headers, timeout=TIMEOUT)
     except BaseException as exception:
-        logger.info(exception)
+        if logger:
+            logger.info(exception)
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation, logger)
 
     if r.status_code != 200:
-        logger.info("invalid secure link response")
+        if logger:
+            logger.info("invalid secure link response")
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation, logger)
 
@@ -75,6 +76,8 @@ def get_dependency_link(api_handler):
         api_handler,
         f"{constants.GOG_CONTENT_SYSTEM}/open_link?generation=2&_version=2&path=/dependencies/store/",
     )
+    if not data:
+        return None
     return data["urls"]
 
 
@@ -126,3 +129,12 @@ def get_range_header(offset, size):
     from_value = offset
     to_value = (int(offset) + int(size)) - 1
     return f"bytes={from_value}-{to_value}"
+
+# Creates appropriate Manifest class based on provided meta from json
+def create_manifest_class(meta: dict, api_handler):
+    version = meta.get("version") 
+    if version == 1:
+        return v1.Manifest.from_json(meta, api_handler)
+    else:
+        return v2.Manifest.from_json(meta, api_handler)
+

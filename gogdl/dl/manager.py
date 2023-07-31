@@ -1,7 +1,8 @@
 import json
 from sys import platform
 from multiprocessing import cpu_count
-from gogdl.dl import objects, linux_native
+from gogdl.dl import linux_native
+import gogdl.dl.objects as objects
 from gogdl.dl.worker import *
 from gogdl.dl.progressbar import ProgressBar
 from concurrent.futures import ThreadPoolExecutor, as_completed

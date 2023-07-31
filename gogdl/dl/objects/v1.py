@@ -1,7 +1,9 @@
 import json
 import os
 from gogdl.dl import dl_utils
+from gogdl.dl.objects import generic, v2
 from gogdl import constants
+
 
 class Depot:
     def __init__(self, target_lang, depot_data):
@@ -21,7 +23,7 @@ class Depot:
 
 class Directory:
     def __init__(self, item_data):
-        self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep).rstrip(os.sep)
+        self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep).lstrip(os.sep)
 
 class Dependency:
     def __init__(self, data):
@@ -31,25 +33,33 @@ class Dependency:
 
 
 class File:
-    def __init__(self, data):
+    def __init__(self, data, product_id):
         self.offset = data["offset"]
         self.hash = data["hash"]
         self.url = data["url"]
         self.path = data["path"].lstrip("/")
         self.size = data["size"]
-        self.support = data.get("support")
+        self.flags = []
+        if data.get("support"):
+            self.flags.append("support")
+        if data.get("executable"):
+            self.flags.append("executble")
+
+        self.product_id = product_id
 
 class Manifest:
-    def __init__(self, meta, language, dlcs, api_handler, dlc_only):
+    def __init__(self, platform, meta, language, dlcs, api_handler, dlc_only):
+        self.platform = platform
         self.data = meta
+        self.data['HGLPlatform'] = platform
         self.data["HGLInstallLanguage"] = language
         self.data["HGLdlcs"] = dlcs
         self.product_id = meta["product"]["rootGameID"]
         self.dlcs = dlcs
-        self.dlc_only = dlcs
+        self.dlc_only = dlc_only 
         self.all_depots = [] 
         self.depots = self.parse_depots(language, meta["product"]["depots"])
-        self.dependencies_ids = [depot['redist'] for depot in meta["product"]["depots"] if depot.get('redist')]
+        self.dependencies = [Dependency(depot) for depot in meta["product"]["depots"] if depot.get('redist')]
 
         self.api_handler = api_handler
 
@@ -58,7 +68,7 @@ class Manifest:
 
     @classmethod
     def from_json(cls, meta, api_handler):
-        manifest = cls(meta, meta['HGLInstallLanguage'], meta["HGLdlcs"], api_handler, False)
+        manifest = cls(meta['HGLPlatform'], meta, meta['HGLInstallLanguage'], meta["HGLdlcs"], api_handler, False)
         return manifest
     
     def serialize_to_json(self):
@@ -108,11 +118,47 @@ class Manifest:
     
     def get_files(self):
         for depot in self.depots:
-            manifest = dl_utils.get_json(self.api_handler, f"{constants.GOG_CDN}/content-system/v1/manifests/{self.product_id}/{self.platform}/{self.data['product']['timestamp']}/{depot['manifest']}")
+            manifest = dl_utils.get_json(self.api_handler, f"{constants.GOG_CDN}/content-system/v1/manifests/{depot.game_ids[0]}/{self.platform}/{self.data['product']['timestamp']}/{depot.manifest}")
             for record in manifest["depot"]["files"]:
                 if "directory" in record:
                     self.dirs.append(Directory(record)) 
                 else:
-                    self.files.append(File(record))
+                    self.files.append(File(record, depot.game_ids[0]))
 
+class ManifestDiff(generic.BaseDiff):
+    def __init__(self):
+        super().__init__()
     
+    @classmethod
+    def compare(cls, new_manifest, old_manifest=None):
+        comparison = cls()
+
+        if not old_manifest:
+            comparison.new = new_manifest.files
+            return comparison
+
+        new_files = dict()
+        for file in new_manifest.files:
+            new_files.update({file.path: file})
+        
+        old_files = dict()
+        for file in old_manifest.files:
+            old_files.update({file.path: file})
+
+        for old_file in old_files.values():
+            if not new_files.get(old_file.path):
+                comparison.deleted.append(old_file)
+        
+        if type(old_manifest) == v2.Manifest:
+            comparison.new = new_manifest.files
+            return comparison
+    
+        for new_file in new_files.values():
+            old_file = old_files.get(new_file.path)
+            if not old_file:
+                comparison.new.append(new_file)
+            else:
+                if new_file.hash != old_file.hash:
+                    comparison.changed.append(new_file)
+
+        return comparison

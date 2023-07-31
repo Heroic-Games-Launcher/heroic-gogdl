@@ -31,7 +31,7 @@ def init_parser():
     redist_download_parser = subparsers.add_parser("redist", aliases=["dependencies"],
                                                    help="Download specified dependencies to provided location")
 
-    redist_download_parser.add_argument("ids", help="Coma separated ids", required=True)
+    redist_download_parser.add_argument("ids", help="Coma separated ids")
     redist_download_parser.add_argument("--path", help="Location where to download the files", required=True)
     redist_download_parser.add_argument("--print-manifest", action="store_true", help="Prints manifest to stdout")
     redist_download_parser.add_argument(
