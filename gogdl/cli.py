@@ -41,8 +41,9 @@ def main():
             "info": download_manager.calculate_download_size,
         }
     elif arguments.command in ["redist", "dependencies"]:
-        dependencies_handler = dependencies.DependenciesManager(arguments.ids.split(","), arguments.path, arguments.workers_count, api_handler)
-        dependencies_handler.get()
+        dependencies_handler = dependencies.DependenciesManager(arguments.ids.split(","), arguments.path, arguments.workers_count, api_handler, print_manifest=arguments.print_manifest)
+        if not arguments.print_manifest:
+            dependencies_handler.get()
     else:
         switcher = {
             "import": imports.get_info,

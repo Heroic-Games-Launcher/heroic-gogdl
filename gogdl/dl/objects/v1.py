@@ -29,7 +29,7 @@ class Dependency:
     def __init__(self, data):
         self.id = data["redist"]
         self.size = data.get("size")
-        self.target_dir = data["targetDir"]
+        self.target_dir = data.get("targetDir")
 
 
 class File:
@@ -60,6 +60,7 @@ class Manifest:
         self.all_depots = [] 
         self.depots = self.parse_depots(language, meta["product"]["depots"])
         self.dependencies = [Dependency(depot) for depot in meta["product"]["depots"] if depot.get('redist')]
+        self.dependencies_ids = [depot['redist'] for depot in meta["product"]["depots"] if depot.get('redist')]
 
         self.api_handler = api_handler
 
@@ -139,14 +140,14 @@ class ManifestDiff(generic.BaseDiff):
 
         new_files = dict()
         for file in new_manifest.files:
-            new_files.update({file.path: file})
+            new_files.update({file.path.lower(): file})
         
         old_files = dict()
         for file in old_manifest.files:
-            old_files.update({file.path: file})
+            old_files.update({file.path.lower(): file})
 
         for old_file in old_files.values():
-            if not new_files.get(old_file.path):
+            if not new_files.get(old_file.path.lower()):
                 comparison.deleted.append(old_file)
         
         if type(old_manifest) == v2.Manifest:
@@ -154,7 +155,7 @@ class ManifestDiff(generic.BaseDiff):
             return comparison
     
         for new_file in new_files.values():
-            old_file = old_files.get(new_file.path)
+            old_file = old_files.get(new_file.path.lower())
             if not old_file:
                 comparison.new.append(new_file)
             else:

@@ -111,8 +111,19 @@ class Manager:
             old_manifest.get_files()
         diff = v2.ManifestDiff.compare(self.manifest, old_manifest)
         self.logger.info(diff)
+
+
         dependencies_manager = dependencies.DependenciesManager(self.manifest.dependencies_ids, self.path,
                                                                 self.arguments.workers_count, self.api_handler, download_game_deps_only=True)
+
+        # Find dependencies that are no longer used
+        if old_manifest:
+            removed_dependencies = [id for id in old_manifest.dependencies_ids if id not in self.manifest.dependencies_ids]
+            
+            for depot in dependencies_manager.repository[0]["depots"]:
+                if depot["dependencyId"] in removed_dependencies and not depot["executable"]["path"].startswith("__redist"):
+                    diff.removed_redist += dependencies_manager.get_files_for_depot_manifest(depot['manifest'])
+
 
         if not len(diff.changed) and not len(diff.deleted) and not len(diff.new):
             self.logger.info("Nothing to do")
@@ -196,7 +207,9 @@ class Manager:
         executor.setup(download_tasks, writer_tasks, writer_results)
         # Remove all deleted files from diff
         [os.remove(os.path.join(self.path, f.path)) for f in diff.deleted if os.path.exists(os.path.join(self.path, f.path))]
-        executor.run()
+        [os.remove(os.path.join(self.path, f.path)) for f in diff.removed_redist if os.path.exists(os.path.join(self.path, f.path))]
+        if len(download_tasks) > 0 or len(writer_tasks) > 0 or len(writer_results) > 0:
+            executor.run()
         
         dl_utils.prepare_location(manifests_dir)
         if self.manifest:
