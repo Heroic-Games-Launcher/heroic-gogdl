@@ -1,7 +1,7 @@
 import os
 from sys import platform
 
-GOG_CDN = "https://cdn.gog.com"
+GOG_CDN = "https://gog-cdn-fastly.gog.com"
 GOG_CONTENT_SYSTEM = "https://content-system.gog.com"
 GOG_EMBED = "https://embed.gog.com"
 GOG_AUTH = "https://auth.gog.com"

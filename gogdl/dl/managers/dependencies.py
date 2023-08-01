@@ -39,6 +39,13 @@ class DependenciesManager:
         if self.repository and print_manifest:
             print(self.repository)
 
+    def get_files_for_depot_manifest(self, manifest):
+        url = f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(manifest)}'
+        manifest = dl_utils.get_zlib_encoded(self.api, url)[0]
+
+        return get_depot_list(manifest)
+
+
     def get(self, return_files=False):
         depots = []
         if not self.ids:
@@ -60,10 +67,7 @@ class DependenciesManager:
 
         # Collect files for each redistributable
         for depot in depots:
-            url = f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(depot["manifest"])}'
-            manifest = dl_utils.get_zlib_encoded(self.api, url)[0]
-
-            files += get_depot_list(manifest)
+            files += self.get_files_for_depot_manifest(depot["manifest"])
 
         if return_files:
             return files

@@ -170,13 +170,21 @@ class Manager:
                 }
             )
         
+        dependency_manager = DependenciesManager([dep.id for dep in self.manifest.dependencies], self.path, self.allowed_threads, self.api_handler, download_game_deps_only=True)
+        
+        # Find dependencies that are no longer used
+        if old_manifest:
+            removed_dependencies = [id for id in old_manifest.dependencies_ids if id not in self.manifest.dependencies_ids]
+            
+            for depot in dependency_manager.repository[0]["depots"]:
+                if depot["dependencyId"] in removed_dependencies and not depot["executable"]["path"].startswith("__redist"):
+                    diff.removed_redist += dependency_manager.get_files_for_depot_manifest(depot['manifest'])
+
         if has_dependencies:
             secure_links.update({'redist': dl_utils.get_dependency_link(self.api_handler)})
-            dependency_manager = DependenciesManager([dep.id for dep in self.manifest.dependencies], self.path, self.allowed_threads, self.api_handler, download_game_deps_only=True)
             
             diff.redist = dependency_manager.get(return_files=True) or []
 
-            print(diff.redist)
             for f in diff.redist:
                 if len(f.chunks) == 0:
                     writer_tasks.append(WriterTask(TaskType.CREATE, 'redist', f.flags, self.path, f.path, None))
@@ -197,9 +205,11 @@ class Manager:
         executor.setup(download_tasks, writer_tasks, [])
         # Remove all deleted files from diff
         [os.remove(os.path.join(self.path, f.path)) for f in diff.deleted if os.path.exists(os.path.join(self.path, f.path))]
+        [os.remove(os.path.join(self.path, f.path)) for f in diff.removed_redist if os.path.exists(os.path.join(self.path, f.path))]
         for dir in self.manifest.dirs:
             dl_utils.prepare_location(os.path.join(self.path, dir.path))
-        executor.run()
+        if len(download_tasks) > 0 or len(writer_tasks) > 0:
+            executor.run()
 
         dl_utils.prepare_location(manifests_dir)
         if self.manifest:
