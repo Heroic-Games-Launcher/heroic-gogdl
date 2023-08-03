@@ -8,6 +8,7 @@ import requests
 from sys import exit
 
 PATH_SEPARATOR = os.sep
+TIMEOUT = 10
 
 
 def get_json(api_handler, url):
@@ -18,7 +19,7 @@ def get_json(api_handler, url):
 
 
 def get_zlib_encoded(api_handler, url, logger=None):
-    r = requests.get(url, headers=api_handler.session.headers, timeout=1)
+    r = requests.get(url, headers=api_handler.session.headers, timeout=TIMEOUT)
     if r.status_code != 200:
         if logger:
             logger.info("zlib response != 200")
@@ -54,7 +55,7 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&type=depot&path={path}"
 
     try:
-        r = requests.get(url, headers=api_handler.session.headers, timeout=1)
+        r = requests.get(url, headers=api_handler.session.headers, timeout=TIMEOUT)
     except BaseException as exception:
         logger.info(exception)
         time.sleep(0.2)
