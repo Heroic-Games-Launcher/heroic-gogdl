@@ -127,7 +127,7 @@ class Manifest:
 
 class FileDiff:
     def __init__(self):
-        self.file = None
+        self.file: DepotFile
 
     @classmethod
     def compare(cls, new, old):

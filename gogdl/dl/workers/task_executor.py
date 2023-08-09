@@ -311,6 +311,6 @@ class Writer(Process):
 
             if "executable" in task.flags and sys.platform != 'win32':
                 mode = os.stat(handle_path).st_mode
-                os.chmod(handle_path, mode & stat.S_IEXEC & stat.S_IXUSR & stat.S_IXGRP)
+                os.chmod(handle_path, mode | stat.S_IEXEC | stat.S_IXUSR | stat.S_IXGRP)
                 
             self.results_queue.put(TaskResult(True, None, task, None))

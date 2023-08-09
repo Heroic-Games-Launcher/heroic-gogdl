@@ -5,18 +5,26 @@ import hashlib
 from threading import Thread
 from multiprocessing import Queue, Manager as ProcessingManager
 from queue import Empty
+
+from gogdl.dl.dl_utils import get_readable_size
+from gogdl.dl.progressbar import ProgressBar
 from gogdl.dl.workers import task_executor
 from gogdl.dl.objects import generic, v2, v1
 
-class ExecutingManager():
+class ExecutingManager:
     def __init__(self, api_handler, allowed_threads, path, diff, secure_links) -> None:
-        super().__init__()
         self.api_handler = api_handler
         self.allowed_threads = allowed_threads
         self.path = path
         self.diff: generic.BaseDiff = diff
         self.secure_links = secure_links
         self.logger = logging.getLogger("TASK_EXEC")
+
+        self.download_size = 0
+        self.disk_size = 0
+
+        self.downloaded_size = 0
+        self.written_size = 0
         
         self.stop_all_threads = False
 
@@ -30,6 +38,20 @@ class ExecutingManager():
         self.manager = ProcessingManager()
         self.shared_secure_links = self.manager.dict()
         self.shared_secure_links.update(self.secure_links)
+
+        for f in self.diff.new + self.diff.changed + self.diff.redist:
+            if type(f) == v1.File:
+                self.download_size += f.size
+                self.disk_size += f.size
+            elif type(f) == v2.DepotFile:
+                self.download_size += sum([ch["compressedSize"] for ch in f.chunks])
+                self.disk_size += sum([ch["size"] for ch in f.chunks])
+            elif type(f) == v2.FileDiff:
+                self.download_size += sum([ch["compressedSize"] for ch in f.file.chunks if not ch.get("old_offset")])
+                self.disk_size += sum([ch["size"] for ch in f.file.chunks])
+
+
+        self.progress = ProgressBar(self.disk_size, get_readable_size(self.disk_size), 50)
 
         self.download_workers = list()
         self.writer_workers = list()
@@ -124,21 +146,31 @@ class ExecutingManager():
                     refreshed_secure_links_timestamps.update({res.task.product_id: time.time()})
                     download_queue.put(res.task)
                 continue
-                
+            
             file_path = res.task.file_path
             chunk_index = 0 if type(res.task) == task_executor.DownloadTask1 else res.task.chunk_index
             result, compex_patch = self.update_download_state(diff, state, file_path, chunk_index)
             if not result:
                 continue
 
+            if type(res.task) == task_executor.DownloadTask2:
+                self.downloaded_size += res.task.chunk_data["compressedSize"]
+                self.written_size += res.task.chunk_data["size"]
+            elif type(res.task) == task_executor.DownloadTask1:
+                self.downloaded_size += res.task.size
+                self.written_size += res.task.size
+
+    
+            print(get_readable_size(self.downloaded_size), get_readable_size(self.download_size), get_readable_size(self.written_size), get_readable_size(self.disk_size))
+
             if state[file_path][0] <= len(state[file_path][1]) and type(res.task) != task_executor.DownloadTask1:
                 writer_queue.put(task_executor.WriterTask(task_executor.TaskType.ASSEMBLE, res.task.product_id, res.task.flags, self.path, file_path, (state[file_path][0], compex_patch))) 
             elif type(res.task) == task_executor.DownloadTask1:
                 self.finished += 1
 
-            if self.finished == len(diff.new) + len(diff.changed) + len(diff.redist):
-                self.stop_all_threads = True
-                break
+                if self.finished == len(diff.new) + len(diff.changed) + len(diff.redist):
+                    self.stop_all_threads = True
+                    break
                 
 
     def process_writer_task_results(self, state: dict[str, tuple[int, list[int], bool]], diff: generic.BaseDiff, download_queue: Queue, writer_queue: Queue, writer_res_queue: Queue):
