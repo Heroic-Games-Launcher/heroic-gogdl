@@ -58,11 +58,12 @@ def init_parser():
     download_parser.add_argument("id", help="Game id")
     download_parser.add_argument("--lang", "-l", help="Specify game language")
     download_parser.add_argument(
-        "--build", "-b", dest="build", help="Specify buildId (allows repairing)"
+        "--build", "-b", dest="build", help="Specify buildId"
     )
     download_parser.add_argument(
         "--path", "-p", dest="path", help="Specify download path", required=True
     )
+    download_parser.add_argument("--support", dest="support_path", help="Specify path where support files should be stored")
     download_parser.add_argument(
         "--platform",
         "--os",
