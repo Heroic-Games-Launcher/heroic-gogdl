@@ -19,7 +19,7 @@ class Manager:
         self.game_id = arguments.id
         self.branch = arguments.branch or None
         if "workers_count" in arguments:
-            self.allowed_threads = arguments.workers_count
+            self.allowed_threads = int(arguments.workers_count)
         else:
             self.allowed_threads = cpu_count()
 
