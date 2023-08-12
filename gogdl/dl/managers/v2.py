@@ -92,6 +92,7 @@ class Manager:
 
         # Load old manifest
         if os.path.exists(manifest_path):
+            self.logger.debug(f"Loading existing manifest for game {self.game_id}")
             with open(manifest_path, 'r') as f_handle:
                 try:
                     json_data = json.load(f_handle)
