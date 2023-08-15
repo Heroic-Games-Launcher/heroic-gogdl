@@ -48,6 +48,7 @@ class Manager:
         self.setup_download_manager()
 
         download_size_response = self.download_manager.get_download_size()
+        download_size_response['builds'] = self.builds
 
 
         print(json.dumps(download_size_response))

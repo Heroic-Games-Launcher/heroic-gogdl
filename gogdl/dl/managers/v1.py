@@ -69,7 +69,8 @@ class Manager:
         self.manifest = v1.Manifest(self.platform, self.meta, self.lang, dlcs, self.api_handler, False)
 
         size_data = self.manifest.calculate_download_size()
-        available_branches = set([build["branch"] for build in self.builds["items"]])
+        available_branches = set([build["branch"] for build in self.builds["items"] if build["branch"]])
+        available_branches_list = [None] + list(available_branches)
 
         for dlc in dlcs:
             dlc.update({"size": size_data[dlc["id"]]})
@@ -83,7 +84,7 @@ class Manager:
             "dependencies": [dep.id for dep in self.manifest.dependencies],
             "versionEtag": self.version_etag,
             "versionName": self.version_name,
-            "available_branches": list(available_branches)
+            "available_branches": available_branches_list 
         }
         return response
 

@@ -51,7 +51,7 @@ class ExecutingManager:
                 self.disk_size += sum([ch["size"] for ch in f.file.chunks])
 
 
-        self.progress = ProgressBar(self.disk_size, get_readable_size(self.disk_size), 50)
+        self.progress = ProgressBar(self.disk_size, get_readable_size(self.disk_size))
 
         self.download_workers = list()
         self.writer_workers = list()
@@ -74,6 +74,7 @@ class ExecutingManager:
         allowed_downloaders = max(self.allowed_threads - 2, 1)
         allowed_writers = min(allowed_downloaders, 2)
 
+        self.progress.start()
         task_results_processor.start()
         writer_results_processor.start()
 
@@ -93,6 +94,7 @@ class ExecutingManager:
         self.shutdown()
 
     def shutdown(self, force=False):
+        self.progress.completed = True
         if not force:
             [self.download_queue.put(task_executor.Task(task_executor.TaskType.EXIT, "", [])) for _ in self.download_workers]
             [self.writer_queue.put(task_executor.Task(task_executor.TaskType.EXIT, "", [])) for _ in self.writer_workers]
@@ -107,6 +109,7 @@ class ExecutingManager:
 
             [worker.join() for worker in self.download_workers]
             [worker.join() for worker in self.writer_workers]
+        self.progress.join()
 
         self.download_queue.close()
         self.download_res_queue.close()
@@ -154,14 +157,13 @@ class ExecutingManager:
                 continue
 
             if type(res.task) == task_executor.DownloadTask2:
-                self.downloaded_size += res.task.chunk_data["compressedSize"]
-                self.written_size += res.task.chunk_data["size"]
+                self.progress.update_downloaded_size(res.task.chunk_data["compressedSize"])
+                self.progress.update_bytes_written(res.task.chunk_data["size"])
             elif type(res.task) == task_executor.DownloadTask1:
-                self.downloaded_size += res.task.size
-                self.written_size += res.task.size
+                self.progress.update_downloaded_size(res.task.size)
+                self.progress.update_bytes_written(res.task.size)
 
     
-            print(get_readable_size(self.downloaded_size), get_readable_size(self.download_size), get_readable_size(self.written_size), get_readable_size(self.disk_size))
 
             if state[file_path][0] <= len(state[file_path][1]) and type(res.task) != task_executor.DownloadTask1:
                 writer_queue.put(task_executor.WriterTask(task_executor.TaskType.ASSEMBLE, res.task.product_id, res.task.flags, self.path, file_path, (state[file_path][0], compex_patch))) 

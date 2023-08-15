@@ -4,11 +4,10 @@ from time import sleep, time
 
 
 class ProgressBar(threading.Thread):
-    def __init__(self, max_val, total_readable_size, length):
+    def __init__(self, max_val, total_readable_size):
         self.logger = logging.getLogger("PROGRESS")
         self.downloaded = 0
         self.total = max_val
-        self.length = length
         self.started_at = time()
         self.last_update = time()
         self.total_readable_size = total_readable_size
@@ -17,31 +16,18 @@ class ProgressBar(threading.Thread):
         self.read_total = 0
         self.written_total = 0
 
-        self.written_since_last_update = 0
-        self.read_since_last_update = 0
-        self.downloaded_since_last_update = 0
-        self.decompressed_since_last_update = 0
-
         super().__init__(target=self.print_progressbar)
 
     def print_progressbar(self):
-        done = 0
 
-        while True:
-            if self.completed:
-                break
-            percentage = (self.downloaded / self.total) * 100
+        while not self.completed:
+            percentage = (self.written_total / self.total) * 100
             running_time = time() - self.started_at
             runtime_h = int(running_time // 3600)
             runtime_m = int((running_time % 3600) // 60)
             runtime_s = int((running_time % 3600) % 60)
 
-            time_since_last_update = time() - self.last_update
-            if time_since_last_update == 0:
-                time_since_last_update = 1
-            size_left = self.total - self.downloaded
-
-            # average_speed = self.downloaded / running_time
+            average_speed = self.downloaded / running_time
 
             if percentage > 0:
                 estimated_time = (100 * running_time) / percentage - running_time
@@ -53,19 +39,7 @@ class ProgressBar(threading.Thread):
             estimated_m = int(estimated_time // 60)
             estimated_s = int(estimated_time % 60)
 
-            write_speed = self.written_since_last_update / time_since_last_update
-            read_speed = self.read_since_last_update / time_since_last_update
-            download_speed = self.downloaded_since_last_update / time_since_last_update
-            decompress_speed = (
-                self.decompressed_since_last_update / time_since_last_update
-            )
-
-            self.read_total += self.read_since_last_update
-            self.written_total += self.written_since_last_update
-            self.downloaded += self.downloaded_since_last_update
-
-            self.read_since_last_update = self.written_since_last_update = 0
-            self.decompressed_since_last_update = self.downloaded_since_last_update = 0
+            write_speed = self.written_total / running_time 
 
             self.logger.info(
                 f"= Progress: {percentage:.02f} {self.downloaded}/{self.total}, "
@@ -79,13 +53,13 @@ class ProgressBar(threading.Thread):
             )
 
             self.logger.info(
-                f" + Download\t- {download_speed / 1024 / 1024:.02f} MiB/s (raw) "
-                f"/ {decompress_speed / 1024 / 1024:.02f} MiB/s (decompressed)"
+                f" + Download\t- {average_speed / 1024 / 1024:.02f} MiB/s (raw) "
+                f"/ {write_speed / 1024 / 1024:.02f} MiB/s (decompressed)"
             )
 
             self.logger.info(
                 f" + Disk\t- {write_speed / 1024 / 1024:.02f} MiB/s (write) / "
-                f"{read_speed / 1024 / 1024:.02f} MiB/s (read)"
+                #f"{read_speed / 1024 / 1024:.02f} MiB/s (read)"
             )
 
             self.last_update = time()
@@ -94,14 +68,5 @@ class ProgressBar(threading.Thread):
     def update_downloaded_size(self, addition):
         self.downloaded += addition
 
-    def update_download_speed(self, addition):
-        self.downloaded_since_last_update += addition
-
-    def update_decompressed_speed(self, addition):
-        self.decompressed_since_last_update += addition
-
-    def update_bytes_read(self, addition):
-        self.read_since_last_update += addition
-
     def update_bytes_written(self, addition):
-        self.written_since_last_update += addition
+        self.written_total += addition
