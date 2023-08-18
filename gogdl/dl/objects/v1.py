@@ -34,9 +34,9 @@ class Dependency:
 
 class File:
     def __init__(self, data, product_id):
-        self.offset = data["offset"]
-        self.hash = data["hash"]
-        self.url = data["url"]
+        self.offset = data.get("offset")
+        self.hash = data.get("hash")
+        self.url = data.get("url")
         self.path = data["path"].lstrip("/")
         self.size = data["size"]
         self.flags = []

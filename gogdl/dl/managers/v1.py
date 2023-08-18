@@ -204,11 +204,13 @@ class Manager:
 
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, diff, secure_links)
         executor.setup(download_tasks, writer_tasks, [])
+        dl_utils.prepare_location(self.path)
         # Remove all deleted files from diff
         [os.remove(os.path.join(self.path, f.path)) for f in diff.deleted if os.path.exists(os.path.join(self.path, f.path))]
         [os.remove(os.path.join(self.path, f.path)) for f in diff.removed_redist if os.path.exists(os.path.join(self.path, f.path))]
         for dir in self.manifest.dirs:
-            dl_utils.prepare_location(os.path.join(self.path, dir.path))
+            manifest_dir_path = os.path.join(self.path, dir.path)
+            dl_utils.prepare_location(dl_utils.get_case_insensitive_name(self.path, manifest_dir_path))
         if len(download_tasks) > 0 or len(writer_tasks) > 0:
             executor.run()
 

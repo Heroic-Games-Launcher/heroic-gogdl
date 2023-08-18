@@ -3,6 +3,7 @@ import json
 import sys
 import subprocess
 import time
+from gogdl.dl.dl_utils import get_case_insensitive_name
 from ctypes import *
 from gogdl.process import Process
 import signal
@@ -214,13 +215,3 @@ def load_game_info(path, id, platform):
         return json.loads(data)
 
 
-def get_case_insensitive_name(root, path):
-    if not root[len(root) - 1] in ["/", "\\"]:
-        root = root + "/"
-    s_working_dir = path.replace(root, "").split(os.sep)
-    for directory in s_working_dir:
-        dir_list = os.listdir(root)
-        for existing_dir in dir_list:
-            if existing_dir.lower() == directory.lower():
-                root = os.path.join(root, existing_dir)
-    return root

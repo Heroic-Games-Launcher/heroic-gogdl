@@ -6,7 +6,7 @@ from gogdl.dl.objects import v1, v2
 import shutil
 import time
 import requests
-from sys import exit
+from sys import exit, platform
 
 PATH_SEPARATOR = os.sep
 TIMEOUT = 10
@@ -138,3 +138,21 @@ def create_manifest_class(meta: dict, api_handler):
     else:
         return v2.Manifest.from_json(meta, api_handler)
 
+def get_case_insensitive_name(root, path):
+    if platform == "win32":
+        return path
+    if not root[len(root) - 1] in ["/", "\\"]:
+        root = root + os.sep
+    s_working_dir = path.replace(root, "").split(os.sep)
+    paths_to_find = len(s_working_dir)
+    paths_found = 0
+    for directory in s_working_dir:
+        dir_list = os.listdir(root)
+        for existing_dir in dir_list:
+            if existing_dir.lower() == directory.lower():
+                root = os.path.join(root, existing_dir)
+                paths_found += 1
+
+    if paths_to_find != paths_found:
+        root = os.path.join(root, os.sep.join(s_working_dir[paths_found:]))
+    return root

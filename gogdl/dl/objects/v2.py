@@ -150,6 +150,7 @@ class ManifestDiff(generic.BaseDiff):
     @classmethod
     def compare(cls, manifest, old_manifest=None):
         comparison = cls()
+        is_manifest_upgrade = type(old_manifest) == v1.Manifest
 
         if not old_manifest:
             comparison.new = manifest.files
@@ -167,15 +168,19 @@ class ManifestDiff(generic.BaseDiff):
             if not new_files.get(old_file.path.lower()):
                 comparison.deleted.append(old_file)
 
-        if type(old_manifest) == v1.Manifest:
-            comparison.new = manifest.files
-            return comparison
-
         for new_file in new_files.values():
             old_file = old_files.get(new_file.path.lower())
             if not old_file:
                 comparison.new.append(new_file)
             else:
+                if is_manifest_upgrade:
+                    if len(new_file.chunks) == 0:
+                        continue
+                    new_final_sum = new_file.md5 or new_file.chunks[0]["md5"]
+                    if new_final_sum:
+                        if old_file.hash != new_final_sum:
+                            comparison.changed.append(new_file)
+                    continue
                 if len(new_file.chunks) == 1 and len(old_file.chunks) == 1:
                     if new_file.chunks[0]["md5"] != old_file.chunks[0]["md5"]:
                         comparison.changed.append(new_file)

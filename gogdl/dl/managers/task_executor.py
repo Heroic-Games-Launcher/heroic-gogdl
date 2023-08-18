@@ -5,6 +5,7 @@ import hashlib
 from threading import Thread
 from multiprocessing import Queue, Manager as ProcessingManager
 from queue import Empty
+from gogdl.dl import dl_utils
 
 from gogdl.dl.dl_utils import get_readable_size
 from gogdl.dl.progressbar import ProgressBar
@@ -195,15 +196,18 @@ class ExecutingManager:
 
                     if not found:
                         for f in diff.changed:
-                            if f.file.path == file_path:
+                            if type(f) != v2.FileDiff and f.path == file_path:
                                 found = f
+                                break
+                            elif type(f) == v2.FileDiff and f.file.path == file_path:
+                                found = f.file
                                 break
                     if not found:
                         self.logger.info(f"MISSING CHUNK for file {file_path}, was not able to continue skipping the file")
                         continue
                     
                     chunk_data = found.chunks[chunk_index]
-                    new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, res.task.product_id, res.task.flags, chunk_index, chunk_data, self.path, file_path, True, False)
+                    new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, res.task.product_id, res.task.flags, chunk_index, chunk_data, self.path, file_path, False)
                     download_queue.put(new_task)
                     continue
                 continue
@@ -222,7 +226,7 @@ class ExecutingManager:
                         if f.file.path == res.task.file_path:
                             file = f
                             break
-                    destination = os.path.join(res.task.destination, res.task.file_path)
+                    destination = dl_utils.get_case_insensitive_name(res.task.destination, os.path.join(res.task.destination, res.task.file_path))
                     new_file = destination+".new"
                     with open(new_file, "rb") as new_f_handle:
                         md5_sum = hashlib.md5()

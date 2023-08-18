@@ -94,6 +94,7 @@ class Download(Process):
             task.destination, task.file_path + f".tmp{task.chunk_index}"
         )
 
+        destination = dl_utils.get_case_insensitive_name(task.destination, destination)
         dl_utils.prepare_location(os.path.split(destination)[0])
 
         urls = self.secure_links[task.product_id]
@@ -125,7 +126,7 @@ class Download(Process):
 
         response = None
         try:
-            response = self.session.get(url, stream=True, timeout=30)
+            response = self.session.get(url, timeout=30)
             response.raise_for_status()
         except Exception as e:
             # Handle exception
@@ -138,14 +139,11 @@ class Download(Process):
         final_sum = hashlib.md5()
         decompressor = zlib.decompressobj(15)
         try:
-            for chunk in response.iter_content(1024 * 1024):
-                compressed_sum.update(chunk)
-                if decompressor:
-                    data = decompressor.decompress(chunk)
-                    final_sum.update(data)
-                    file_handle.write(data)
-                else:
-                    file_handle.write(chunk)
+            chunk = response.content
+            compressed_sum.update(chunk)
+            data = decompressor.decompress(chunk)
+            final_sum.update(data)
+            file_handle.write(data)
 
         except Exception as e:
             print("ERROR", e)
@@ -165,23 +163,15 @@ class Download(Process):
             task.destination, task.file_path
         )
 
+        destination = dl_utils.get_case_insensitive_name(task.destination, destination)
         dl_utils.prepare_location(os.path.split(destination)[0])
 
+        if task.size == 0:
+            self.results_queue.put(TaskResult(True, None, task, None))
+            return 
+
         urls = self.secure_links[task.product_id]
-
         md5 = task.checksum
-
-        if os.path.exists(destination):
-            file_handle = open(destination, "rb")
-            test_md5 = hashlib.md5()
-            while chunk := file_handle.read(10 * 1024 * 1024):
-                test_md5.update(chunk)
-            file_handle.close()
-
-            if test_md5.hexdigest() == md5:
-                self.results_queue.put(TaskResult(True, None, task, None))
-                return
-                
 
         file_handle = open(destination, "wb")
 
@@ -204,7 +194,6 @@ class Download(Process):
                 return
             self.results_queue.put(TaskResult(False, FailReason.CHECKSUM, task, None))
             return 
-
          
         try:
             for chunk in response.iter_content(1024 * 1024):
@@ -239,6 +228,8 @@ class Writer(Process):
             if task.type == TaskType.EXTRACT:
                 index, chunk = task.context
                 source = os.path.join(task.destination, task.file_path)
+                if not os.path.exists(source):
+                    source = dl_utils.get_case_insensitive_name(task.destination, source)
                 target = source + f".tmp{index}" 
 
                 file_handle = open(source, "rb")
@@ -264,6 +255,7 @@ class Writer(Process):
 
 
             destination = os.path.join(task.destination, task.file_path)
+            destination = dl_utils.get_case_insensitive_name(task.destination, destination)
             dl_utils.prepare_location(os.path.split(destination)[0])
 
             if task.type == TaskType.CREATE:
@@ -272,21 +264,25 @@ class Writer(Process):
                 self.results_queue.put(TaskResult(True, None, task, None))
                 continue
             
+            failed = False
             for i in range(task.context[0]):
-                if not os.path.exists(destination+f".tmp{i}"):
+                tmp_destination = dl_utils.get_case_insensitive_name(task.destination, destination+f".tmp{i}")
+                if not os.path.exists(tmp_destination):
                     # This shouldn't happen
-                    print(f"Unable to put chunks together, file {i} is missing")
-                    self.results_queue.put(TaskResult(False, FailReason.MISSING_CHUNK, task, i))
+                    self.results_queue.put(TaskResult(False, FailReason.MISSING_CHUNK, task, (i, task.context[1])))
+                    failed = True
                     continue
+            if failed:
+                continue
 
             handle_path = destination
             # Complex patching boolean
             if task.context[1]:
                 handle_path = destination+".new"
-
+            handle_path = dl_utils.get_case_insensitive_name(task.destination, handle_path)
             # Number of chunks
             if task.context[0] == 1:
-                os.rename(destination+f".tmp0",handle_path)
+                os.rename(dl_utils.get_case_insensitive_name(task.destination, destination+f".tmp0"), handle_path)
 
                 if "executable" in task.flags and sys.platform != 'win32':
                     mode = os.stat(handle_path).st_mode
@@ -301,10 +297,11 @@ class Writer(Process):
             file_handle = open(handle_path, "wb")
 
             for i in range(task.context[0]):
-                reader = open(destination+f".tmp{i}", "rb")
+                tmp_destination = dl_utils.get_case_insensitive_name(task.destination ,destination+f".tmp{i}")
+                reader = open(tmp_destination, "rb")
                 data = reader.read()
                 reader.close()
-                os.remove(destination+f".tmp{i}")
+                os.remove(tmp_destination)
                 file_handle.write(data)
 
             file_handle.close()
