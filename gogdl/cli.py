@@ -10,8 +10,6 @@ import gogdl.auth as auth
 from gogdl import version as gogdl_version
 import logging
 
-logging.basicConfig(format="[%(name)s] %(levelname)s: %(message)s", level=logging.INFO)
-logger = logging.getLogger("MAIN")
 
 
 def display_version():
@@ -20,6 +18,11 @@ def display_version():
 
 def main():
     arguments, unknown_args = args.init_parser()
+    level = logging.INFO
+    if '-d' in unknown_args or '--debug' in unknown_args:
+        level = logging.DEBUG
+    logging.basicConfig(format="[%(name)s] %(levelname)s: %(message)s", level=level)
+    logger = logging.getLogger("MAIN")
     logger.debug(arguments)
     if arguments.display_version:
         display_version()

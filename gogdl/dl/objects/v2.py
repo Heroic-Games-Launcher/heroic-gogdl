@@ -150,7 +150,7 @@ class ManifestDiff(generic.BaseDiff):
     @classmethod
     def compare(cls, manifest, old_manifest=None):
         comparison = cls()
-        is_manifest_upgrade = type(old_manifest) == v1.Manifest
+        is_manifest_upgrade = isinstance(old_manifest, v1.Manifest)
 
         if not old_manifest:
             comparison.new = manifest.files

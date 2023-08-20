@@ -8,7 +8,7 @@ from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.managers.dependencies import DependenciesManager
 from gogdl.dl.managers.task_executor import ExecutingManager
-from gogdl.dl.workers.task_executor import DownloadTask1, DownloadTask2, TaskType, WriterTask
+from gogdl.dl.workers.task_executor import DownloadTask1, DownloadTask2, WriterTask
 from gogdl.dl.objects import v1
 
 manifests_dir = os.path.join(constants.CONFIG_DIR, "manifests")
@@ -153,8 +153,6 @@ class Manager:
 
         self.logger.info(f"{diff}")
 
-        download_tasks: list[Union[DownloadTask1, DownloadTask2]] = []
-        writer_tasks: list[WriterTask] = []
 
         has_dependencies = len(self.manifest.dependencies) > 0
         
@@ -186,33 +184,16 @@ class Manager:
             
             diff.redist = dependency_manager.get(return_files=True) or []
 
-            for f in diff.redist:
-                if len(f.chunks) == 0:
-                    writer_tasks.append(WriterTask(TaskType.CREATE, 'redist', f.flags, self.path, f.path, None))
-                    continue
-                for i, chunk in enumerate(f.chunks):
-                    new_task = DownloadTask2(TaskType.DOWNLOAD_V2, 'redist', f.flags, i, chunk, self.path, f.path, True)
-                    download_tasks.append(new_task)
-
-        for f in diff.new:
-            task = DownloadTask1(TaskType.DOWNLOAD_V1, f.product_id, f.flags, f.size, f.offset, f.hash, self.path, f.path)
-            download_tasks.append(task)
-
-        for f in diff.changed:
-            task = DownloadTask1(TaskType.DOWNLOAD_V1, f.product_id, f.flags, f.size, f.offset, f.hash, self.path, f.path)
-            download_tasks.append(task)
 
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, diff, secure_links)
-        executor.setup(download_tasks, writer_tasks, [])
+        executor.setup()
         dl_utils.prepare_location(self.path)
-        # Remove all deleted files from diff
-        [os.remove(os.path.join(self.path, f.path)) for f in diff.deleted if os.path.exists(os.path.join(self.path, f.path))]
-        [os.remove(os.path.join(self.path, f.path)) for f in diff.removed_redist if os.path.exists(os.path.join(self.path, f.path))]
+
         for dir in self.manifest.dirs:
             manifest_dir_path = os.path.join(self.path, dir.path)
             dl_utils.prepare_location(dl_utils.get_case_insensitive_name(self.path, manifest_dir_path))
-        if len(download_tasks) > 0 or len(writer_tasks) > 0:
-            executor.run()
+
+        executor.run()
 
         dl_utils.prepare_location(manifests_dir)
         if self.manifest:

@@ -25,12 +25,5 @@ elif platform == 'darwin':
         os.path.expanduser("~/Library"), "Application Support", "heroic_gogdl"
     )
 
-# Use only for Linux
-CACHE_DIR = (
-    os.path.join(
-        os.getenv("XDG_CACHE_HOME", os.path.join(os.path.expanduser("~"), ".cache")),
-        "heroicGOGdl",
-    )
-    if platform == "linux"
-    else ""
-)
+if os.getenv("GOGDL_CONFIG_PATH"):
+    CONFIG_DIR = os.path.join(os.getenv("GOGDL_CONFIG_PATH"), "heroic_gogdl")

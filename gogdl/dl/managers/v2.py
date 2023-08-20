@@ -155,68 +155,16 @@ class Manager:
                 }
             )
 
-        download_tasks = list()
-        writer_tasks = list()
-        writer_results = list()
-
-        for f in diff.redist:
-            if len(f.chunks) == 0:
-                writer_tasks.append(task_executor.WriterTask(task_executor.TaskType.CREATE, 'redist', f.flags, self.path, f.path, None))
-                continue
-            for i, chunk in enumerate(f.chunks):
-                new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, 'redist', f.flags, i, chunk, self.path, f.path, True)
-                download_tasks.append(new_task)
-
-        for f in diff.new:
-            if len(f.chunks) == 0:
-                writer_tasks.append(task_executor.WriterTask(task_executor.TaskType.CREATE, f.product_id, f.flags, self.path, f.path, None))
-                continue
-            joined_path = os.path.join(self.path, f.path)
-            if os.path.exists(joined_path) and len(f.chunks) > 0:
-                md5 = hashlib.md5()
-                sha256 = hashlib.sha256()
-                file_md5 = f.md5 or f.chunks[0]['md5']
-                file_sha256 = f.sha256 
-                with open(joined_path, 'rb') as fh:
-                    while data := fh.read(1024 * 1024):
-                        md5.update(data)
-                        sha256.update(data)
-
-                if file_md5 and md5.hexdigest() == file_md5 or file_sha256 and sha256.hexdigest() == file_sha256:
-                    writer_results.append(task_executor.TaskResult(True, None, task_executor.WriterTask(task_executor.TaskType.ASSEMBLE, f.product_id, f.flags, self.path, f.path, len(f.chunks)), None))
-                    continue
-                
-            for i, chunk in enumerate(f.chunks):
-                new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, f.product_id, f.flags, i, chunk, self.path, f.path, False)
-                download_tasks.append(new_task)
-
-        for f in diff.changed:
-            if type(f) == v2.DepotFile:
-                for i, chunk in enumerate(f.chunks):
-                    new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, f.product_id, f.flags, i, chunk, self.path,f.path, False)
-                    download_tasks.append(new_task)
-            else:
-                for i, chunk in enumerate(f.file.chunks):
-                    if not chunk.get("old_offset"):
-                        new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, f.file.product_id, f.file.flags, i, chunk, self.path,f.file.path, False)
-                        download_tasks.append(new_task)
-                    else:
-                        extract_task = task_executor.WriterTask(task_executor.TaskType.EXTRACT, f.file.product_id, f.file.flags, self.path, f.file.path, (i, chunk))
-                        writer_tasks.append(extract_task)
-                
         # TODO: Check available space before continuing 
 
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, diff, secure_links)
-        executor.setup(download_tasks, writer_tasks, writer_results)
+        executor.setup()
         dl_utils.prepare_location(self.path)
-        # Remove all deleted files from diff
-        [os.remove(os.path.join(self.path, f.path)) for f in diff.deleted if os.path.exists(os.path.join(self.path, f.path))]
-        [os.remove(os.path.join(self.path, f.path)) for f in diff.removed_redist if os.path.exists(os.path.join(self.path, f.path))]
+
         for dir in self.manifest.dirs:
             manifest_dir_path = os.path.join(self.path, dir.path)
             dl_utils.prepare_location(dl_utils.get_case_insensitive_name(self.path, manifest_dir_path))
-        if len(download_tasks) > 0 or len(writer_tasks) > 0 or len(writer_results) > 0:
-            executor.run()
+        executor.run()
         
         dl_utils.prepare_location(manifests_dir)
         if self.manifest:

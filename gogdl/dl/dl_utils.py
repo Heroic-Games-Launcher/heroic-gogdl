@@ -147,12 +147,20 @@ def get_case_insensitive_name(root, path):
     paths_to_find = len(s_working_dir)
     paths_found = 0
     for directory in s_working_dir:
+        if not os.path.exists(root):
+            break
         dir_list = os.listdir(root)
+        found = False
         for existing_dir in dir_list:
             if existing_dir.lower() == directory.lower():
                 root = os.path.join(root, existing_dir)
                 paths_found += 1
+                found = True
+        if not found:
+            root = os.path.join(root, directory)
+            paths_found += 1
 
     if paths_to_find != paths_found:
         root = os.path.join(root, os.sep.join(s_working_dir[paths_found:]))
     return root
+

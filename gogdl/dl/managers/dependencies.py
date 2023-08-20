@@ -43,7 +43,7 @@ class DependenciesManager:
         url = f'{constants.GOG_CDN}/content-system/v2/dependencies/meta/{dl_utils.galaxy_path(manifest)}'
         manifest = dl_utils.get_zlib_encoded(self.api, url)[0]
 
-        return get_depot_list(manifest)
+        return get_depot_list(manifest, 'redist')
 
 
     def get(self, return_files=False):
