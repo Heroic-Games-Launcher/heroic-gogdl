@@ -26,7 +26,7 @@ class Manager:
         self.api_handler = generic_manager.api_handler
         self.should_append_folder_name = generic_manager.should_append_folder_name
         self.is_verifying = generic_manager.is_verifying
-        self.allowed_threads = generic_manager.allowed_threads
+        self.allowed_threads = min(generic_manager.allowed_threads, 4)
 
         self.platform = generic_manager.platform
 

@@ -1,14 +1,14 @@
 import logging
 import os
 import time
-import hashlib
+import math
 from threading import Thread
 from collections import deque
 from multiprocessing import Queue, Manager as ProcessingManager
 from threading import Condition
 from multiprocessing.shared_memory import SharedMemory
 from queue import Empty
-from typing import Counter
+from typing import Counter, Union
 from gogdl.dl import dl_utils
 
 from gogdl.dl.dl_utils import get_readable_size
@@ -35,7 +35,7 @@ class ExecutingManager:
         self.shared_memory = None
         self.shm_segments = deque()
         self.v2_chunks_to_download = deque()
-        self.v1_files_to_download = deque()
+        self.v1_chunks_to_download = deque()
         self.tasks = deque()
         self.active_tasks = 0
 
@@ -80,6 +80,7 @@ class ExecutingManager:
 
 
         shared_chunks_counter = Counter()
+        downloaded_v1 = dict()
         cached = set()
 
         self.biggest_chunk = 0
@@ -97,6 +98,8 @@ class ExecutingManager:
                             self.biggest_chunk = chunk["size"]
         if not self.biggest_chunk:
             self.biggest_chunk = 20 * 1024 * 1024
+        else:
+            self.biggest_chunk = max(self.biggest_chunk, 10 * 1024 * 1024)
 
         # Create tasks for each chunk
         for f in self.diff.new + self.diff.changed + self.diff.redist:
@@ -104,10 +107,33 @@ class ExecutingManager:
                 if f.size == 0:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE))
                     continue
-                self.v1_files_to_download.append(f)
-                self.tasks.append(f)
+                
+                if f.hash in downloaded_v1:
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.COPY_FILE, old_file=downloaded_v1[f.hash].path))
+                    if 'executable' in f.flags:
+                        self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE))
+                    continue
+                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.OPEN_FILE))
+                size_left = f.size
+                chunk_offset = 0
+                i = 0
+                while size_left:
+                    chunk_size = min(self.biggest_chunk, size_left)
+                    offset = f.offset + chunk_offset
+                    
+                    task = generic.V1Task(f.product_id, i, offset, chunk_size, f.hash)
+                    self.tasks.append(task)
+                    self.v1_chunks_to_download.append((f.product_id, task.compressed_md5, offset, chunk_size))
+
+                    chunk_offset += chunk_size
+                    size_left -= chunk_size
+                    i += 1
+
+                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CLOSE_FILE))
                 if 'executable' in f.flags:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE))
+                downloaded_v1[f.hash] = f
+
             elif isinstance(f, v2.DepotFile):
                 if not len(f.chunks):
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE))
@@ -170,7 +196,7 @@ class ExecutingManager:
 
         self.progress = ProgressBar(self.disk_size, get_readable_size(self.disk_size))
         self.items_to_complete = len(self.tasks)
-
+        
     def run(self):
         self.shared_memory = SharedMemory(create=True, size=1024*1024*1024)
         self.logger.debug(f"Created shared memory {self.shared_memory.size / 1024 / 1024:.02f} MiB")
@@ -186,8 +212,6 @@ class ExecutingManager:
             self.threads.append(Thread(target=self.process_task_results, args=(self.task_cond,)))
             self.threads.append(Thread(target=self.process_writer_task_results, args=(self.shm_cond,)))
 
-            self.progress.start()
-            [th.start() for th in self.threads]
 
             # Spawn workers 
             for _ in range(self.allowed_threads):
@@ -197,6 +221,9 @@ class ExecutingManager:
         
             self.writer_worker = task_executor.Writer(self.shared_memory.name, self.writer_queue, self.writer_res_queue, self.cache)
             self.writer_worker.start()
+
+            self.progress.start()
+            [th.start() for th in self.threads]
 
             while self.processed_items < self.items_to_complete:
                 time.sleep(1)
@@ -246,11 +273,6 @@ class ExecutingManager:
             self.download_queue.put(generic.TerminateWorker())
         
         self.writer_queue.put(generic.TerminateWorker())
-        with self.task_cond:
-            self.task_cond.notify()
-
-        with self.shm_cond:
-            self.shm_cond.notify()
         for worker in self.download_workers:
             worker.join(timeout=2)
             if worker.is_alive():
@@ -268,22 +290,19 @@ class ExecutingManager:
             self.shared_memory.close()
             self.shared_memory.unlink()
             self.shared_memory = None
+
         self.running = False
+        with self.task_cond:
+            self.task_cond.notify()
+
+        with self.shm_cond:
+            self.shm_cond.notify()
 
     def download_manager(self, task_cond: Condition, shm_cond: Condition):
         self.logger.debug("Starting download scheduler")
         no_shm = False
-        while (self.v2_chunks_to_download or self.v1_files_to_download) and self.running:
-            while self.active_tasks < self.allowed_threads and (self.v2_chunks_to_download or self.v1_files_to_download):
-                try:
-                    file = self.v1_files_to_download.popleft()
-                    # V1 files stream directly to drive
-                    self.download_queue.put(task_executor.DownloadTask1(file.product_id, file.flags, file.size, file.offset, file.hash, self.path, file.path))
-                    self.logger.debug("Pushed v1 download to queue")
-                    self.active_tasks += 1
-                    continue
-                except IndexError:
-                    pass
+        while self.running:
+            while self.active_tasks <= self.allowed_threads and (self.v2_chunks_to_download or self.v1_chunks_to_download):
 
                 try:
                     memory_segment = self.shm_segments.popleft()
@@ -292,26 +311,41 @@ class ExecutingManager:
                     no_shm = True
                     break 
 
-                product_id, chunk_hash = self.v2_chunks_to_download.popleft()
-                try:
-                    self.download_queue.put(task_executor.DownloadTask2(product_id, chunk_hash, memory_segment), timeout=1)
-                    self.logger.debug(f"Pushed DownloadTask2 for {chunk_hash}")
-                    self.active_tasks += 1
-                except Exception as e:
-                    self.logger.warning(f"Failed to push task to download {e}")
-                    self.v2_chunks_to_download.appendleft((product_id, chunk_hash))
-                    break
+                if self.v1_chunks_to_download:
+                    product_id, chunk_id, offset, chunk_size = self.v1_chunks_to_download.popleft()
+
+                    try:
+                        self.download_queue.put(task_executor.DownloadTask1(product_id, offset, chunk_size, chunk_id, memory_segment))
+                        self.logger.debug(f"Pushed v1 download to queue {chunk_id} {product_id} {offset} {chunk_size}")
+                        self.active_tasks += 1
+                        continue
+                    except Exception as e:
+                        self.logger.warning(f"Failed to push v1 task to download {e}")
+                        self.v1_chunks_to_download.appendleft((product_id, chunk_id, offset, chunk_size))
+                        self.shm_segments.appendleft(memory_segment)
+                        break
+                elif self.v2_chunks_to_download:
+                    product_id, chunk_hash = self.v2_chunks_to_download.popleft()
+                    try:
+                        self.download_queue.put(task_executor.DownloadTask2(product_id, chunk_hash, memory_segment), timeout=1)
+                        self.logger.debug(f"Pushed DownloadTask2 for {chunk_hash}")
+                        self.active_tasks += 1
+                    except Exception as e:
+                        self.logger.warning(f"Failed to push task to download {e}")
+                        self.v2_chunks_to_download.appendleft((product_id, chunk_hash))
+                        self.shm_segments.appendleft(memory_segment)
+                        break
 
             else:
                 with task_cond:
                     self.logger.debug("Waiting for more tasks")
-                    task_cond.wait(timeout=1.0)
+                    task_cond.wait(timeout=5.0)
                     continue
 
             if no_shm:
                 with shm_cond:
                     self.logger.debug(f"Waiting for more memory")
-                    shm_cond.wait(timeout=1.0)
+                    shm_cond.wait(timeout=5.0)
 
         self.logger.debug("Download scheduler out..")
 
@@ -340,12 +374,12 @@ class ExecutingManager:
                     continue
 
                 try:
-                    task: generic.Union[ChunkTask, v1.File] = self.tasks.popleft()
+                    task: Union[generic.ChunkTask, generic.V1Task] = self.tasks.popleft()
                 except IndexError:
                     break
                 continue
             
-            while (not isinstance(task, v1.File)) and ((task.compressed_md5 in ready_chunks) or task.old_file):
+            while ((task.compressed_md5 in ready_chunks) or task.old_file):
                 shm = None
                 if not task.old_file:
                     shm = ready_chunks[task.compressed_md5].task.memory_segment
@@ -376,28 +410,19 @@ class ExecutingManager:
             else:
                 try:
                     res: task_executor.DownloadTaskResult = self.download_res_queue.get(timeout=1)
-                    if isinstance(res.task, task_executor.DownloadTask1):
-                        if not res.success:
-                            self.download_queue.put(res.task)
-                            self.active_tasks += 1
-                        else:
-                            self.processed_items += 1
-
-                    elif res.success:
+                    if res.success:
                         self.logger.debug(f"Chunk {res.task.compressed_sum} ready")
                         ready_chunks[res.task.compressed_sum] = res
                         self.progress.update_downloaded_size(res.download_size)
                         self.progress.update_bytes_written(res.decompressed_size)
+                        self.active_tasks -= 1
                     else:
                         self.logger.warning(f"Chunk download failed, reason {res.fail_reason}")
                         try:
                             self.download_queue.put(res.task, timeout=1)
-                            self.active_tasks += 1
                         except Exception as e:
                             self.logger.warning("Failed to resubmit download task, pushing to chunks queue")
-                            self.v2_chunks_to_download.appendleft((res.task.product_id, res.task.compressed_sum))
 
-                    self.active_tasks -= 1
                     with task_cond:
                         task_cond.notify()
                 except Empty:

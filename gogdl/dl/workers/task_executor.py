@@ -4,6 +4,7 @@ from queue import Empty
 import shutil
 import sys
 import stat
+import time
 import requests
 import zlib
 import hashlib
@@ -31,12 +32,13 @@ class DownloadTask:
 
 @dataclass
 class DownloadTask1(DownloadTask):
-    flags: list 
-    size: int
     offset: int
-    checksum: str
-    destination: str
-    file_path: str
+    size: int
+    # This sum is not valid MD5 as it contains chunk id too
+    # V1 doesn't support chunks, this is sort of forceful way to use them
+    # in this algorithm
+    compressed_sum: str
+    memory_segment: MemorySegment
 
 @dataclass
 class DownloadTask2(DownloadTask):
@@ -86,7 +88,7 @@ class Download(Process):
     def run(self):
         while not self.early_exit:
             try:
-                task: Union[DownloadTask1, DownloadTask2, TerminateWorker] = self.download_queue.get(timeout=2)
+                task: Union[DownloadTask1, DownloadTask2, TerminateWorker] = self.download_queue.get(timeout=1)
             except Empty:
                continue 
 
@@ -98,10 +100,11 @@ class Download(Process):
             elif type(task) == DownloadTask1:
                 self.v1(task)
 
+        self.session.close()
         self.shared_memory.close()
 
     def v2(self, task: DownloadTask2):
-        
+        retries = 5 
         urls = self.secure_links[task.product_id]
 
         compressed_md5 = task.compressed_sum
@@ -117,17 +120,24 @@ class Download(Process):
             url = endpoint["url"]
 
         response = None
-        try:
-            response = self.session.get(url, timeout=5)
-            response.raise_for_status()
-        except Exception as e:
-            print("Download failed", e)
-            # Handle exception
-            if response and response.status_code == 401:
-                self.results_queue.put(DownloadTaskResult(False, FailReason.UNAUTHORIZED, task))
-                return
+        while retries > 0:
+            try:
+                response = self.session.get(url, timeout=10)
+                response.raise_for_status()
+            except Exception as e:
+                print("Connection failed", e)
+                # Handle exception
+                if response and response.status_code == 401:
+                    self.results_queue.put(DownloadTaskResult(False, FailReason.UNAUTHORIZED, task))
+                    return
+                retries -= 1
+                time.sleep(2)
+                continue
+            break
+        else:
             self.results_queue.put(DownloadTaskResult(False, FailReason.CHECKSUM, task))
-            return 
+            return
+
         compressed_sum = hashlib.md5()
         download_size = 0
         decompressed_size = 0
@@ -152,23 +162,8 @@ class Download(Process):
         self.results_queue.put(DownloadTaskResult(True, None, task, download_size=download_size, decompressed_size=decompressed_size))
     
     def v1(self, task: DownloadTask1):
-        destination = os.path.join(
-            task.destination, task.file_path
-        )
-
-        destination = dl_utils.get_case_insensitive_name(task.destination, destination)
-        dl_utils.prepare_location(os.path.split(destination)[0])
-
-        if task.size == 0:
-            self.results_queue.put(DownloadTaskResult(True, None, task, None))
-            return 
-
+        retries = 5
         urls = self.secure_links[task.product_id]
-        md5 = task.checksum
-
-        file_handle = open(destination, "wb")
-
-        final_sum = hashlib.md5()
 
         endpoint = copy(urls[0])
         response = None
@@ -177,32 +172,37 @@ class Download(Process):
             endpoint["url_format"], endpoint["parameters"]
         )
         range_header = dl_utils.get_range_header(task.offset, task.size)
-        try:
-            response = self.session.get(url, stream=True, timeout=5, headers={'Range': range_header})
-            response.raise_for_status()
-        except Exception as e:
-            # Handle exception
-            if response and response.status_code == 401:
-                self.results_queue.put(DownloadTaskResult(False, FailReason.UNAUTHORIZED, task, None))
-                return
-            self.results_queue.put(DownloadTaskResult(False, FailReason.CHECKSUM, task, None))
-            return 
+
+        while retries > 0:
+            try:
+                response = self.session.get(url, timeout=10, headers={'Range': range_header})
+                response.raise_for_status()
+            except Exception as e:
+                print("Connection failed", e)
+                #Handle exception
+                if response and response.status_code == 401:
+                    self.results_queue.put(DownloadTaskResult(False, FailReason.UNAUTHORIZED, task))
+                    return
+                retries -= 1
+                time.sleep(2)
+                continue
+            break
+        else:
+            self.results_queue.put(DownloadTaskResult(False, FailReason.CHECKSUM, task))
+            return
          
+        download_size = 0
         try:
-            for chunk in response.iter_content(1024 * 1024):
-                final_sum.update(chunk)
-                file_handle.write(chunk)
+            chunk = response.content
+            download_size = len(chunk)
+            self.shared_memory.buf[task.memory_segment.offset:download_size + task.memory_segment.offset] = chunk
+
         except Exception as e:
             print("ERROR", e)
-            self.results_queue.put(DownloadTaskResult(False, FailReason.UNKNOWN, task, None))
-            return 
-        file_handle.close()
-
-        if final_sum.hexdigest() != md5:
-            self.results_queue.put(DownloadTaskResult(False, FailReason.CHECKSUM, task, None))
+            self.results_queue.put(DownloadTaskResult(False, FailReason.UNKNOWN, task))
             return 
 
-        self.results_queue.put(DownloadTaskResult(True, None, task, None))
+        self.results_queue.put(DownloadTaskResult(True, None, task, download_size=download_size, decompressed_size=download_size))
 
 class Writer(Process):
     def __init__(self, shared_memory, writer_queue, results_queue, cache):
@@ -252,9 +252,28 @@ class Writer(Process):
                     file_handle = None
                 self.results_queue.put(WriterTaskResult(True, task))
                 continue
+            
+            elif task.flags & TaskFlag.COPY_FILE:
+                if file_handle and task.file_path == current_file:
+                    print("Copy on unclosed file")
+                    file_handle.close()
+                    file_handle = None
+
+                if not task.old_file:
+                    # if this ever happens....
+                    self.results_queue.put(WriterTaskResult(False, task))
+                    continue
+
+                try:
+                    shutil.copy(dl_utils.get_case_insensitive_name(task.destination, os.path.join(task.destination, task.old_file)), task_path)
+                except shutil.SameFileError:
+                    pass
+                except Exception:
+                    self.results_queue.put(WriterTaskResult(False, task))
+                    continue
 
             elif task.flags & TaskFlag.RENAME_FILE:
-                if file_handle:
+                if file_handle and task.file_path == current_file:
                     print("Renaming on unclosed file")
                     file_handle.close()
                     file_handle = None
@@ -280,12 +299,13 @@ class Writer(Process):
                 continue
             
             elif task.flags & TaskFlag.DELETE_FILE:
-                if file_handle:
+                if file_handle and task.file_path == current_file:
                     print("Deleting on unclosed file")
                     file_handle.close()
                     file_handle = None
                 try:
-                    os.remove(task_path)
+                    if os.path.exists(task_path):
+                        os.remove(task_path)
                 except OSError as e:
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue

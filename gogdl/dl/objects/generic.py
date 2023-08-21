@@ -20,6 +20,7 @@ class TaskFlag(Flag):
     CLOSE_FILE = auto()
     CREATE_FILE = auto()
     RENAME_FILE = auto()
+    COPY_FILE = auto()
     DELETE_FILE = auto()
     OFFLOAD_TO_CACHE = auto()
     MAKE_EXE = auto()
@@ -48,6 +49,23 @@ class ChunkTask:
     offload_to_cache: bool = False
     old_offset: Optional[int] = None
     old_file: Optional[str] = None
+
+@dataclass
+class V1Task:
+    product: str
+    index: int
+    offset: int
+    size: int
+    file_hash: str
+    cleanup: Optional[bool] = True
+
+    old_offset: Optional[int] = None
+    offload_to_cache: Optional[bool] = False
+    old_file: Optional[str] = None
+
+    @property
+    def compressed_md5(self):
+        return self.file_hash + "_" + str(self.index)
 
 @dataclass
 class FileTask:

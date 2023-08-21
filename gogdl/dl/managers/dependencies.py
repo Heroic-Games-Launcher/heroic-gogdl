@@ -5,6 +5,7 @@ from gogdl.dl import dl_utils
 import gogdl.constants as constants
 from gogdl.dl.managers.task_executor import ExecutingManager
 from gogdl.dl.objects import v2
+from gogdl.dl.objects.generic import BaseDiff
 from gogdl.dl.workers import task_executor
 
 
@@ -74,28 +75,13 @@ class DependenciesManager:
 
         secure_link = dl_utils.get_dependency_link(self.api) # This should never expire
 
-        writer_tasks = list()
-        download_tasks = list()
-
-        for f in files:
-            if len(f.chunks) == 0:
-                writer_tasks.append(task_executor.WriterTask(task_executor.TaskType.CREATE, 'redist', f.flags, self.path, f.path, None))
-                continue
-            for i, chunk in enumerate(f.chunks):
-                new_task = task_executor.DownloadTask2(task_executor.TaskType.DOWNLOAD_V2, 'redist', f.flags, i, chunk, self.path, f.path, True)
-                download_tasks.append(new_task)
-
-
         diff = DependenciesDiff()
         diff.new = files
 
         executor = ExecutingManager(self.api, self.workers_count, self.path, diff, {'redist': secure_link})
-        executor.setup(download_tasks, writer_tasks, [])
+        executor.setup()
         executor.run()
 
-class DependenciesDiff:
+class DependenciesDiff(BaseDiff):
     def __init__(self):
-        self.deleted = []
-        self.new = []
-        self.changed = []
-        self.redist = []
+        super().__init__()

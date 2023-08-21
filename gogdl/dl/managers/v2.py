@@ -25,6 +25,7 @@ class Manager:
             self.path = ""
 
         self.allowed_threads = generic_manager.allowed_threads
+        self.allowed_threads = min(self.allowed_threads, 8)
 
         self.api_handler = generic_manager.api_handler
         self.should_append_folder_name = generic_manager.should_append_folder_name
