@@ -99,7 +99,7 @@ class ExecutingManager:
         if not self.biggest_chunk:
             self.biggest_chunk = 20 * 1024 * 1024
         else:
-            self.biggest_chunk = max(self.biggest_chunk, 10 * 1024 * 1024)
+            self.biggest_chunk = max(self.biggest_chunk, 8 * 1024 * 1024)
 
         # Create tasks for each chunk
         for f in self.diff.new + self.diff.changed + self.diff.redist:
