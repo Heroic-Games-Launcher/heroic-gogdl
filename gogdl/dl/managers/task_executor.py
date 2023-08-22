@@ -63,10 +63,18 @@ class ExecutingManager:
         self.shared_secure_links = self.manager.dict()
         self.shared_secure_links.update(self.secure_links)
 
+        # Required space for download to succeed
+        required_disk_size_delta = 0
+        current_tmp_size = 0
         # This can be either v1 File or v2 DepotFile
         for f in self.diff.deleted + self.diff.removed_redist:
             self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.DELETE_FILE))
+            if isinstance(f, v1.File):
+                required_disk_size_delta -= f.size
+            elif isinstance(f, v2.DepotFile):
+                required_disk_size_delta -= sum([ch['size'] for ch in f.chunks])
 
+        """
         for f in self.diff.new + self.diff.changed + self.diff.redist:
             if isinstance(f, v1.File):
                 self.download_size += f.size
@@ -77,13 +85,14 @@ class ExecutingManager:
             elif isinstance(f, v2.FileDiff):
                 self.download_size += sum([ch["compressedSize"] for ch in f.file.chunks if not ch.get("old_offset")])
                 self.disk_size += sum([ch["size"] for ch in f.file.chunks])
-
+        """
 
         shared_chunks_counter = Counter()
         downloaded_v1 = dict()
         cached = set()
 
         self.biggest_chunk = 0
+        # Find biggest chunk to optimize how much memory is 'wasted' per chunk
         for f in self.diff.new + self.diff.changed + self.diff.redist:
             if isinstance(f, v2.DepotFile):
                 for i, chunk in enumerate(f.chunks):
@@ -99,6 +108,7 @@ class ExecutingManager:
         if not self.biggest_chunk:
             self.biggest_chunk = 20 * 1024 * 1024
         else:
+            # Have at least 8 MiB chunk size for V1 downloads
             self.biggest_chunk = max(self.biggest_chunk, 8 * 1024 * 1024)
 
         # Create tasks for each chunk
@@ -108,6 +118,10 @@ class ExecutingManager:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE))
                     continue
                 
+                required_disk_size_delta += f.size
+                self.download_size += f.size
+                self.disk_size += f.size
+                # In case of same file we can copy it over
                 if f.hash in downloaded_v1:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.COPY_FILE, old_file=downloaded_v1[f.hash].path))
                     if 'executable' in f.flags:
@@ -117,6 +131,8 @@ class ExecutingManager:
                 size_left = f.size
                 chunk_offset = 0
                 i = 0
+                # Split V1 file by chunks, so we can store it in shared memory
+                # This makes checksum useless during the download, but well...
                 while size_left:
                     chunk_size = min(self.biggest_chunk, size_left)
                     offset = f.offset + chunk_offset
@@ -144,13 +160,18 @@ class ExecutingManager:
                     is_cached = chunk["compressedMd5"] in cached
                     if shared_chunks_counter[chunk["compressedMd5"]] > 1 and not is_cached:
                         self.v2_chunks_to_download.append((f.product_id, chunk["compressedMd5"]))
+                        self.download_size += chunk['compressedSize']
                         new_task.offload_to_cache = True
                         cached.add(chunk["compressedMd5"])
+                        current_tmp_size += chunk['size']
                     elif is_cached:
                         new_task.old_offset = 0
                         new_task.old_file = os.path.join(self.cache, chunk["compressedMd5"])
                     else:
                         self.v2_chunks_to_download.append((f.product_id, chunk["compressedMd5"]))
+                        self.download_size += chunk['compressedSize']
+                    self.disk_size += chunk['size']
+                    current_tmp_size += chunk['size']
                     shared_chunks_counter[chunk["compressedMd5"]] -= 1
                     new_task.cleanup = shared_chunks_counter[chunk["compressedMd5"]] == 0
                     self.tasks.append(new_task)
@@ -161,8 +182,10 @@ class ExecutingManager:
             elif isinstance(f, v2.FileDiff):
                 chunk_tasks = []
                 reused = 0
+                file_size = 0
                 for i, chunk in enumerate(f.file.chunks):
                     chunk_task = generic.ChunkTask(f.file.product_id, i, chunk["compressedMd5"], chunk["md5"], chunk["size"], chunk["compressedSize"])
+                    file_size += chunk['size']
                     if chunk.get("old_offset"):
                         chunk_task.old_offset = chunk["old_offset"]
                         chunk_task.old_file = f.file.path
@@ -171,31 +194,41 @@ class ExecutingManager:
                         is_cached = chunk["compressedMd5"] in cached
                         if shared_chunks_counter[chunk["compressedMd5"]] > 1 and not is_cached:
                             self.v2_chunks_to_download.append((f.file.product_id, chunk["compressedMd5"]))
+                            self.download_size += chunk['compressedSize']
                             chunk_task.offload_to_cache = True
                             cached.add(chunk["compressedMd5"])
+                            current_tmp_size += chunk['size']
                         elif is_cached:
                             chunk_task.old_offset = 0
                             chunk_task.old_file = os.path.join(self.cache, chunk["compressedMd5"])
                         else:
                             self.v2_chunks_to_download.append((f.file.product_id, chunk["compressedMd5"]))
+                            self.download_size += chunk['compressedSize']
 
                         shared_chunks_counter[chunk["compressedMd5"]] -= 1
                         chunk_task.cleanup = shared_chunks_counter[chunk["compressedMd5"]] == 0
                     chunk_tasks.append(chunk_task)
+                current_tmp_size += file_size
+                required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
                 if reused:
                     self.tasks.append(generic.FileTask(f.file.path + ".tmp", flags=generic.TaskFlag.OPEN_FILE))
                     self.tasks.extend(chunk_tasks)
                     self.tasks.append(generic.FileTask(f.file.path + ".tmp", flags=generic.TaskFlag.CLOSE_FILE))
                     self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.RENAME_FILE | generic.TaskFlag.DELETE_FILE, old_file=f.file.path + ".tmp"))
+                    current_tmp_size -= file_size
                 else:
                     self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.OPEN_FILE))
                     self.tasks.extend(chunk_tasks)
                     self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.CLOSE_FILE))
                 if 'executable' in f.file.flags:
                     self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.MAKE_EXE))
+            required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
 
         self.progress = ProgressBar(self.disk_size, get_readable_size(self.disk_size))
         self.items_to_complete = len(self.tasks)
+
+                
+        return dl_utils.check_free_space(required_disk_size_delta, self.path)
         
     def run(self):
         self.shared_memory = SharedMemory(create=True, size=1024*1024*1024)
@@ -205,7 +238,7 @@ class ExecutingManager:
         for i in range(int(self.shared_memory.size / chunk_size)):
             segment = generic.MemorySegment(offset=i*chunk_size, end=i*chunk_size+chunk_size)
             self.shm_segments.append(segment)
-        self.logger.debug(f"Created shm segments {len(self.shm_segments)}, chunk size = {self.biggest_chunk / 1024 / 1024} MiB")
+        self.logger.debug(f"Created shm segments {len(self.shm_segments)}, chunk size = {self.biggest_chunk / 1024 / 1024:.02f} MiB")
 
         try:
             self.threads.append(Thread(target=self.download_manager, args=(self.task_cond, self.shm_cond)))

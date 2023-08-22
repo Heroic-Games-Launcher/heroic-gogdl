@@ -128,11 +128,13 @@ class Manifest:
 class FileDiff:
     def __init__(self):
         self.file: DepotFile
+        self.disk_size_diff: int = 0
 
     @classmethod
     def compare(cls, new, old):
         diff = cls()
-
+        diff.disk_size_diff = sum([ch['size'] for ch in new.chunks])
+        diff.disk_size_diff -= sum([ch['size'] for ch in old.chunks])
         for new_chunk in new.chunks:
             old_offset = 0
             for old_chunk in old.chunks:

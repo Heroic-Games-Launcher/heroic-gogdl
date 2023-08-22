@@ -63,6 +63,8 @@ class V1Task:
     offload_to_cache: Optional[bool] = False
     old_file: Optional[str] = None
 
+    # This isn't actual sum, but unique id of chunk we use to decide 
+    # if we should push it to writer
     @property
     def compressed_md5(self):
         return self.file_hash + "_" + str(self.index)

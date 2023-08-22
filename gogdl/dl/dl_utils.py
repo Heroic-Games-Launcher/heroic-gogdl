@@ -117,7 +117,7 @@ def get_readable_size(size):
     return size, power_labels[n] + "B"
 
 
-def check_free_space(size, path):
+def check_free_space(size: int, path: str):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
     _, _, available_space = shutil.disk_usage(path)

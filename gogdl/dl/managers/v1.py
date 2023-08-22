@@ -1,5 +1,6 @@
 # Handle old games downloading via V1 depot system
 # V1 is there since GOG 1.0 days, it has no compression and relies on downloading chunks from big main.bin file
+from sys import exit
 import os 
 import logging
 import json
@@ -186,7 +187,10 @@ class Manager:
 
 
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, diff, secure_links)
-        executor.setup()
+        success = executor.setup()
+        if not success:
+            self.logger.error('Unable to proceed, not enough disk space')
+            exit(2)
         dl_utils.prepare_location(self.path)
 
         for dir in self.manifest.dirs:

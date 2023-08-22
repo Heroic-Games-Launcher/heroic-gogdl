@@ -84,6 +84,11 @@ class Manager:
         self.target_build = self.builds["items"][0]
 
         for build in self.builds["items"]:
+            if build["branch"] == None:
+                self.target_build = build
+                break
+
+        for build in self.builds["items"]:
             if build["branch"] == self.branch:
                 self.target_build = build
                 break
@@ -94,6 +99,7 @@ class Manager:
                 if build["build_id"] == self.arguments.build:
                     self.target_build = build
                     break
+        self.logger.debug(f'Found build {self.target_build}')
 
         generation = self.target_build["generation"]
 

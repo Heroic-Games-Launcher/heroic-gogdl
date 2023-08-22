@@ -158,7 +158,10 @@ class Manager:
         # TODO: Check available space before continuing 
 
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, diff, secure_links)
-        executor.setup()
+        success = executor.setup()
+        if not success:
+            self.logger.error('Unable to proceed, not enough disk space')
+            exit(2)
         dl_utils.prepare_location(self.path)
 
         for dir in self.manifest.dirs:

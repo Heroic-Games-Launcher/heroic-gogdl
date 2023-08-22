@@ -79,7 +79,10 @@ class DependenciesManager:
         diff.new = files
 
         executor = ExecutingManager(self.api, self.workers_count, self.path, diff, {'redist': secure_link})
-        executor.setup()
+        success = executor.setup()
+        if not success:
+            self.logger.error('Unable to proceed, not enough disk space')
+            exit(2)
         executor.run()
 
 class DependenciesDiff(BaseDiff):
