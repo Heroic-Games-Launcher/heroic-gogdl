@@ -52,7 +52,7 @@ class ApiHandler:
         if response.ok:
             return response.json()
 
-    def get_dependencies_list(self, depot_version=2):
+    def get_dependencies_repo(self, depot_version=2):
         self.logger.info("Getting Dependencies repository")
         url = constants.DEPENDENCIES_URL if depot_version == 2 else constants.DEPENDENCIES_V1_URL
         response = self.session.get(url)
@@ -60,9 +60,7 @@ class ApiHandler:
             return None
 
         json_data = json.loads(response.content)
-        if 'repository_manifest' in json_data:
-            self.logger.info("Getting repository manifest")
-            return dl_utils.get_zlib_encoded(self, str(json_data['repository_manifest']), self.logger)[0], json_data.get('version')
+        return json_data
 
     def does_user_own(self, id):
         if not self.owned:

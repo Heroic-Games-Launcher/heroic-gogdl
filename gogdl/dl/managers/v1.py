@@ -181,7 +181,7 @@ class Manager:
         if old_manifest:
             removed_dependencies = [id for id in old_manifest.dependencies_ids if id not in self.manifest.dependencies_ids]
             
-            for depot in dependency_manager.repository[0]["depots"]:
+            for depot in dependency_manager.repository["depots"]:
                 if depot["dependencyId"] in removed_dependencies and not depot["executable"]["path"].startswith("__redist"):
                     diff.removed_redist += dependency_manager.get_files_for_depot_manifest(depot['manifest'])
 
@@ -191,6 +191,9 @@ class Manager:
             diff.redist = dependency_manager.get(return_files=True) or []
 
 
+        if not len(diff.changed) and not len(diff.deleted) and not len(diff.new) and not len(diff.redist) and not len(diff.removed_redist):
+            self.logger.info("Nothing to do")
+            return
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, self.support, diff, secure_links)
         success = executor.setup()
         if not success:

@@ -156,6 +156,8 @@ class ExecutingManager:
                         current_tmp_size += chunk['size']
                     elif is_cached:
                         new_task.old_offset = 0
+                        # This can safely be absolute path, due to
+                        # how os.path.join works in Writer
                         new_task.old_file = os.path.join(self.cache, chunk["compressedMd5"])
                     else:
                         self.v2_chunks_to_download.append((f.product_id, chunk["compressedMd5"]))

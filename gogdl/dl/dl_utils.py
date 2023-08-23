@@ -20,16 +20,21 @@ def get_json(api_handler, url):
 
 
 def get_zlib_encoded(api_handler, url):
-    x = api_handler.session.get(url, timeout=TIMEOUT)
-    if not x.ok:
-        return
-    try:
-        decompressed = json.loads(zlib.decompress(r.content, 15))
-    except zlib.error:
-        if logger:
-            logger.info("error decompressing response")
-        return json.loads(r.content), r.headers
-    return decompressed, r.headers
+    retries = 5
+    while retries > 0:
+        try:
+            x = api_handler.session.get(url, timeout=TIMEOUT)
+            if not x.ok:
+                return None, None
+            try:
+                decompressed = json.loads(zlib.decompress(x.content, 15))
+            except zlib.error:
+                retries-=1
+                continue
+            return decompressed, x.headers
+        except Exception:
+            retries-=1
+    return None, None
 
 
 def prepare_location(path, logger=None):

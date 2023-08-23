@@ -102,6 +102,7 @@ class Manager:
             with open(manifest_path, 'r') as f_handle:
                 try:
                     json_data = json.load(f_handle)
+                    self.logger.info("Creating Manifest instance from existing manifest")
                     old_manifest = dl_utils.create_manifest_class(json_data, self.api_handler)
                 except json.JSONDecodeError:
                     old_manifest = None
@@ -109,12 +110,15 @@ class Manager:
 
         if self.is_verifying:
             if old_manifest:
+                self.logger.warning("Verifying - ignoring obtained manifest in favor of existing one")
                 self.manifest = old_manifest
                 old_manifest = None
 
         if self.manifest:
+            self.logger.debug("Requesting files of primary manifest")
             self.manifest.get_files()
         if old_manifest:
+            self.logger.debug("Requesting files of previous manifest")
             old_manifest.get_files()
         diff = v2.ManifestDiff.compare(self.manifest, old_manifest)
         self.logger.info(diff)
@@ -127,12 +131,14 @@ class Manager:
         if old_manifest:
             removed_dependencies = [id for id in old_manifest.dependencies_ids if id not in self.manifest.dependencies_ids]
             
-            for depot in dependencies_manager.repository[0]["depots"]:
+            for depot in dependencies_manager.repository["depots"]:
                 if depot["dependencyId"] in removed_dependencies and not depot["executable"]["path"].startswith("__redist"):
                     diff.removed_redist += dependencies_manager.get_files_for_depot_manifest(depot['manifest'])
 
 
-        if not len(diff.changed) and not len(diff.deleted) and not len(diff.new):
+        diff.redist = dependencies_manager.get(True) or []
+
+        if not len(diff.changed) and not len(diff.deleted) and not len(diff.new) and not len(diff.redist) and not len(diff.removed_redist):
             self.logger.info("Nothing to do")
             return
         secure_link_endpoints_ids = [product["id"] for product in dlcs_user_owns]
@@ -147,9 +153,6 @@ class Manager:
                     )
                 }
             )
-
-        
-        diff.redist = dependencies_manager.get(True) or []
 
 
         if len(diff.redist) > 0:
