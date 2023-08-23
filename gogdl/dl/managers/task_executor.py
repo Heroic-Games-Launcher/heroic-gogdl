@@ -17,10 +17,11 @@ from gogdl.dl.workers import task_executor
 from gogdl.dl.objects import generic, v2, v1
 
 class ExecutingManager:
-    def __init__(self, api_handler, allowed_threads, path, diff, secure_links) -> None:
+    def __init__(self, api_handler, allowed_threads, path, support, diff, secure_links) -> None:
         self.api_handler = api_handler
         self.allowed_threads = allowed_threads
         self.path = path
+        self.support = support or os.path.join(path, 'gog-support')
         self.cache = os.path.join(path, '.gogdl-download-cache')
         self.diff: generic.BaseDiff = diff
         self.secure_links = secure_links
@@ -74,19 +75,6 @@ class ExecutingManager:
             elif isinstance(f, v2.DepotFile):
                 required_disk_size_delta -= sum([ch['size'] for ch in f.chunks])
 
-        """
-        for f in self.diff.new + self.diff.changed + self.diff.redist:
-            if isinstance(f, v1.File):
-                self.download_size += f.size
-                self.disk_size += f.size
-            elif isinstance(f, v2.DepotFile):
-                self.download_size += sum([ch["compressedSize"] for ch in f.chunks])
-                self.disk_size += sum([ch["size"] for ch in f.chunks])
-            elif isinstance(f, v2.FileDiff):
-                self.download_size += sum([ch["compressedSize"] for ch in f.file.chunks if not ch.get("old_offset")])
-                self.disk_size += sum([ch["size"] for ch in f.file.chunks])
-        """
-
         shared_chunks_counter = Counter()
         downloaded_v1 = dict()
         cached = set()
@@ -114,8 +102,9 @@ class ExecutingManager:
         # Create tasks for each chunk
         for f in self.diff.new + self.diff.changed + self.diff.redist:
             if isinstance(f, v1.File):
+                support_flag = generic.TaskFlag.SUPPORT if 'support' in f.flags else generic.TaskFlag.NONE
                 if f.size == 0:
-                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE))
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE | support_flag))
                     continue
                 
                 required_disk_size_delta += f.size
@@ -123,11 +112,11 @@ class ExecutingManager:
                 self.disk_size += f.size
                 # In case of same file we can copy it over
                 if f.hash in downloaded_v1:
-                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.COPY_FILE, old_file=downloaded_v1[f.hash].path))
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.COPY_FILE | support_flag, old_flags=generic.TaskFlag.SUPPORT if 'support' in downloaded_v1[f.hash].flags else generic.TaskFlag.NONE, old_file=downloaded_v1[f.hash].path))
                     if 'executable' in f.flags:
-                        self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE))
+                        self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
                     continue
-                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.OPEN_FILE))
+                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.OPEN_FILE | support_flag))
                 size_left = f.size
                 chunk_offset = 0
                 i = 0
@@ -145,16 +134,17 @@ class ExecutingManager:
                     size_left -= chunk_size
                     i += 1
 
-                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CLOSE_FILE))
+                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CLOSE_FILE | support_flag))
                 if 'executable' in f.flags:
-                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE))
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
                 downloaded_v1[f.hash] = f
 
             elif isinstance(f, v2.DepotFile):
+                support_flag = generic.TaskFlag.SUPPORT if 'support' in f.flags else generic.TaskFlag.NONE
                 if not len(f.chunks):
-                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE))
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE | support_flag))
                     continue
-                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.OPEN_FILE))
+                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.OPEN_FILE | support_flag))
                 for i, chunk in enumerate(f.chunks):
                     new_task = generic.ChunkTask(f.product_id, i, chunk["compressedMd5"], chunk["md5"], chunk["size"], chunk["compressedSize"])
                     is_cached = chunk["compressedMd5"] in cached
@@ -175,19 +165,22 @@ class ExecutingManager:
                     shared_chunks_counter[chunk["compressedMd5"]] -= 1
                     new_task.cleanup = shared_chunks_counter[chunk["compressedMd5"]] == 0
                     self.tasks.append(new_task)
-                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CLOSE_FILE))
+                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CLOSE_FILE | support_flag))
                 if 'executable' in f.flags:
-                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE))
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
 
             elif isinstance(f, v2.FileDiff):
                 chunk_tasks = []
                 reused = 0
                 file_size = 0
+                support_flag = generic.TaskFlag.SUPPORT if 'support' in f.file.flags else generic.TaskFlag.NONE
+                old_support_flag = generic.TaskFlag.SUPPORT if 'support' in f.old_file_flags else generic.TaskFlag.NONE
                 for i, chunk in enumerate(f.file.chunks):
                     chunk_task = generic.ChunkTask(f.file.product_id, i, chunk["compressedMd5"], chunk["md5"], chunk["size"], chunk["compressedSize"])
                     file_size += chunk['size']
                     if chunk.get("old_offset"):
                         chunk_task.old_offset = chunk["old_offset"]
+                        chunk_task.old_flags = old_support_flag
                         chunk_task.old_file = f.file.path
                         reused += 1
                     else:
@@ -211,24 +204,25 @@ class ExecutingManager:
                 current_tmp_size += file_size
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
                 if reused:
-                    self.tasks.append(generic.FileTask(f.file.path + ".tmp", flags=generic.TaskFlag.OPEN_FILE))
+                    self.tasks.append(generic.FileTask(f.file.path + ".tmp", flags=generic.TaskFlag.OPEN_FILE | support_flag))
                     self.tasks.extend(chunk_tasks)
-                    self.tasks.append(generic.FileTask(f.file.path + ".tmp", flags=generic.TaskFlag.CLOSE_FILE))
-                    self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.RENAME_FILE | generic.TaskFlag.DELETE_FILE, old_file=f.file.path + ".tmp"))
+                    self.tasks.append(generic.FileTask(f.file.path + ".tmp", flags=generic.TaskFlag.CLOSE_FILE | support_flag))
+                    self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.RENAME_FILE | generic.TaskFlag.DELETE_FILE | support_flag, old_file=f.file.path + ".tmp"))
                     current_tmp_size -= file_size
                 else:
-                    self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.OPEN_FILE))
+                    self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.OPEN_FILE | support_flag))
                     self.tasks.extend(chunk_tasks)
-                    self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.CLOSE_FILE))
+                    self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.CLOSE_FILE | support_flag))
                 if 'executable' in f.file.flags:
-                    self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.MAKE_EXE))
+                    self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
+                self.disk_size += file_size
             required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
 
         self.progress = ProgressBar(self.disk_size, get_readable_size(self.disk_size))
         self.items_to_complete = len(self.tasks)
-
                 
         return dl_utils.check_free_space(required_disk_size_delta, self.path)
+
         
     def run(self):
         self.shared_memory = SharedMemory(create=True, size=1024*1024*1024)
@@ -255,7 +249,8 @@ class ExecutingManager:
             self.writer_worker = task_executor.Writer(self.shared_memory.name, self.writer_queue, self.writer_res_queue, self.cache)
             self.writer_worker.start()
 
-            self.progress.start()
+            if self.disk_size:
+                self.progress.start()
             [th.start() for th in self.threads]
 
             while self.processed_items < self.items_to_complete:
@@ -335,7 +330,7 @@ class ExecutingManager:
         self.logger.debug("Starting download scheduler")
         no_shm = False
         while self.running:
-            while self.active_tasks <= self.allowed_threads and (self.v2_chunks_to_download or self.v1_chunks_to_download):
+            while self.active_tasks <= self.allowed_threads * 2 and (self.v2_chunks_to_download or self.v1_chunks_to_download):
 
                 try:
                     memory_segment = self.shm_segments.popleft()
@@ -392,15 +387,24 @@ class ExecutingManager:
         except IndexError:
             task = None
             
+        current_dest = self.path
         current_file = ''
 
         while task and self.running:
             if isinstance(task, generic.FileTask):
                 try:
-                    writer_task = task_executor.WriterTask(self.path, task.path, task.flags, old_file=task.old_file)
+                    task_dest = self.path
+                    old_destination = None
+                    if task.flags & generic.TaskFlag.SUPPORT:
+                        task_dest = self.support
+                    if task.old_flags & generic.TaskFlag.SUPPORT:
+                        old_destination = self.support
+
+                    writer_task = task_executor.WriterTask(task_dest, task.path, task.flags, old_destination=old_destination, old_file=task.old_file)
                     self.writer_queue.put(writer_task, timeout=1)
                     if task.flags & generic.TaskFlag.OPEN_FILE:
                         current_file = task.path
+                        current_dest = task_dest 
                 except Exception as e:
                     self.tasks.appendleft(task)
                     self.logger.warning(f"Failed to add queue element {e}")
@@ -420,11 +424,14 @@ class ExecutingManager:
                 try:
                     self.logger.debug(f"Adding {task.compressed_md5} to writer")
                     flags =  generic.TaskFlag.NONE
+                    old_destination = None
                     if task.cleanup:
                         flags |= generic.TaskFlag.RELEASE_MEM
                     if task.offload_to_cache:
                         flags |= generic.TaskFlag.OFFLOAD_TO_CACHE
-                    self.writer_queue.put(task_executor.WriterTask(self.path, current_file, flags=flags, shared_memory=shm, old_file=task.old_file, old_offset=task.old_offset, size=task.size, hash=task.compressed_md5), timeout=1)
+                    if task.old_flags & generic.TaskFlag.SUPPORT:
+                        old_destination = self.support
+                    self.writer_queue.put(task_executor.WriterTask(current_dest, current_file, flags=flags, shared_memory=shm, old_destination=old_destination, old_file=task.old_file, old_offset=task.old_offset, size=task.size, hash=task.compressed_md5), timeout=1)
                 except Exception as e:
                     self.logger.error(f"Adding to writer queue failed {e}")
                     break
@@ -447,7 +454,6 @@ class ExecutingManager:
                         self.logger.debug(f"Chunk {res.task.compressed_sum} ready")
                         ready_chunks[res.task.compressed_sum] = res
                         self.progress.update_downloaded_size(res.download_size)
-                        self.progress.update_bytes_written(res.decompressed_size)
                         self.active_tasks -= 1
                     else:
                         self.logger.warning(f"Chunk download failed, reason {res.fail_reason}")
@@ -477,6 +483,7 @@ class ExecutingManager:
                 if not res.success:
                     self.logger.fatal("Task writer failed")
 
+                self.progress.update_bytes_written(res.written)
                 if res.task.flags & generic.TaskFlag.RELEASE_MEM and res.task.shared_memory:
                     self.logger.debug(f"Releasing memory {res.task.shared_memory}")
                     self.shm_segments.appendleft(res.task.shared_memory)

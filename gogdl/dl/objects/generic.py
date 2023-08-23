@@ -16,6 +16,7 @@ class BaseDiff:
 
 class TaskFlag(Flag):
     NONE = 0
+    SUPPORT = auto()
     OPEN_FILE = auto()
     CLOSE_FILE = auto()
     CREATE_FILE = auto()
@@ -48,6 +49,7 @@ class ChunkTask:
     cleanup: bool = False
     offload_to_cache: bool = False
     old_offset: Optional[int] = None
+    old_flags: TaskFlag = TaskFlag.NONE 
     old_file: Optional[str] = None
 
 @dataclass
@@ -61,6 +63,7 @@ class V1Task:
 
     old_offset: Optional[int] = None
     offload_to_cache: Optional[bool] = False
+    old_flags: TaskFlag = TaskFlag.NONE 
     old_file: Optional[str] = None
 
     # This isn't actual sum, but unique id of chunk we use to decide 
@@ -74,6 +77,7 @@ class FileTask:
     path: str
     flags: TaskFlag
 
+    old_flags: TaskFlag = TaskFlag.NONE 
     old_file: Optional[str] = None
 
 

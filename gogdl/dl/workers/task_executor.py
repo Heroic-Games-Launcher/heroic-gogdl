@@ -57,6 +57,7 @@ class WriterTask:
     hash: Optional[str] = None
     size: Optional[int] = None
     shared_memory: Optional[MemorySegment] = None
+    old_destination: Optional[str] = None
     old_file: Optional[str] = None
     old_offset: Optional[int] = None
 
@@ -73,6 +74,7 @@ class DownloadTaskResult:
 class WriterTaskResult:
     success: bool
     task: Union[WriterTask, TerminateWorker]
+    written: int = 0
 
 
 class Download(Process):
@@ -226,8 +228,10 @@ class Writer(Process):
             if isinstance(task, TerminateWorker):
                 self.results_queue.put(WriterTaskResult(True, task))
                 break
+
+            written = 0
             
-            task_path = dl_utils.get_case_insensitive_name(task.destination, os.path.join(task.destination, task.file_path))
+            task_path = dl_utils.get_case_insensitive_name(os.path.join(task.destination, task.file_path))
             split_path = os.path.split(task_path)
             if split_path[0] and not os.path.exists(split_path[0]):
                 dl_utils.prepare_location(split_path[0])
@@ -264,8 +268,9 @@ class Writer(Process):
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
 
+                dest = task.old_destination or task.destination
                 try:
-                    shutil.copy(dl_utils.get_case_insensitive_name(task.destination, os.path.join(task.destination, task.old_file)), task_path)
+                    shutil.copy(dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file)), task_path)
                 except shutil.SameFileError:
                     pass
                 except Exception:
@@ -289,8 +294,9 @@ class Writer(Process):
                     except OSError as e:
                         self.results_queue.put(WriterTaskResult(False, task))
                         continue
+                dest = task.old_destination or task.destination
                 try:
-                    os.rename(dl_utils.get_case_insensitive_name(task.destination, os.path.join(task.destination, task.old_file)),task_path)
+                    os.rename(dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file)), task_path)
                 except OSError as e:
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
@@ -334,7 +340,7 @@ class Writer(Process):
                         continue
                     offset = task.shared_memory.offset
                     end = offset + task.size
-                    file_handle.write(self.shared_memory.buf[offset:end].tobytes())
+                    written += file_handle.write(self.shared_memory.buf[offset:end].tobytes())
                     if task.flags & TaskFlag.OFFLOAD_TO_CACHE and task.hash:
                         cache_file_path = os.path.join(self.cache, task.hash)
                         dl_utils.prepare_location(self.cache)
@@ -346,11 +352,12 @@ class Writer(Process):
                         print("No size")
                         self.results_queue.put(WriterTaskResult(False, task))
                         continue
-                    old_file_path = dl_utils.get_case_insensitive_name(task.destination, os.path.join(task.destination, task.old_file))
+                    dest = task.old_destination or task.destination
+                    old_file_path = dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file))
                     old_file_handle = open(old_file_path, "rb")
                     if task.old_offset:
                         old_file_handle.seek(task.old_offset)
-                    file_handle.write(old_file_handle.read(task.size))
+                    written += file_handle.write(old_file_handle.read(task.size))
                     old_file_handle.close()
 
 
@@ -359,7 +366,7 @@ class Writer(Process):
                 print("Writer exception", e)
                 self.results_queue.put(WriterTaskResult(False, task))
             else:
-                self.results_queue.put(WriterTaskResult(True, task))
+                self.results_queue.put(WriterTaskResult(True, task, written=written))
 
         
         self.shared_memory.close()

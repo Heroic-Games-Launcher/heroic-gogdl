@@ -138,11 +138,17 @@ def create_manifest_class(meta: dict, api_handler):
     else:
         return v2.Manifest.from_json(meta, api_handler)
 
-def get_case_insensitive_name(root, path):
-    if platform == "win32":
+def get_case_insensitive_name(path):
+    if platform == "win32" or os.path.exists(path):
         return path
+    root = path
+    # Find existing directory
+    while not os.path.exists(root):
+        root = os.path.split(root)[0]
+    
     if not root[len(root) - 1] in ["/", "\\"]:
         root = root + os.sep
+    # Separate unknown path from existing one
     s_working_dir = path.replace(root, "").split(os.sep)
     paths_to_find = len(s_working_dir)
     paths_found = 0

@@ -55,7 +55,7 @@ def launch(arguments, unknown_args):
         working_dir = os.path.join(arguments.path, relative_working_dir)
 
         if not os.path.exists(executable):
-            executable = get_case_insensitive_name(arguments.path, executable)
+            executable = get_case_insensitive_name(executable)
 
         if len(wrapper) > 0 and wrapper[0] is not None:
             command.extend(wrapper)
@@ -94,7 +94,7 @@ def launch(arguments, unknown_args):
     print("Launch command:", command)
     # Handle case sensitive file systems
     if not os.path.exists(working_dir):
-        working_dir = get_case_insensitive_name(arguments.path, working_dir)
+        working_dir = get_case_insensitive_name(working_dir)
 
     status = None
     if sys.platform == 'linux':

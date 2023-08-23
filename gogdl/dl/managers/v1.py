@@ -24,6 +24,11 @@ class Manager:
         else:
             self.path = ""
 
+        if "support_path" in self.arguments:
+            self.support = self.arguments.support_path
+        else:
+            self.support = ""
+
         self.api_handler = generic_manager.api_handler
         self.should_append_folder_name = generic_manager.should_append_folder_name
         self.is_verifying = generic_manager.is_verifying
@@ -186,7 +191,7 @@ class Manager:
             diff.redist = dependency_manager.get(return_files=True) or []
 
 
-        executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, diff, secure_links)
+        executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, self.support, diff, secure_links)
         success = executor.setup()
         if not success:
             self.logger.error('Unable to proceed, not enough disk space')
@@ -195,7 +200,7 @@ class Manager:
 
         for dir in self.manifest.dirs:
             manifest_dir_path = os.path.join(self.path, dir.path)
-            dl_utils.prepare_location(dl_utils.get_case_insensitive_name(self.path, manifest_dir_path))
+            dl_utils.prepare_location(dl_utils.get_case_insensitive_name(manifest_dir_path))
 
         executor.run()
 

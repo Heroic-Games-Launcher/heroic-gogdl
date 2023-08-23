@@ -23,6 +23,10 @@ class Manager:
             self.path = self.arguments.path
         else:
             self.path = ""
+        if "support_path" in self.arguments:
+            self.support = self.arguments.support_path
+        else:
+            self.support = ""
 
         self.allowed_threads = generic_manager.allowed_threads
 
@@ -157,7 +161,7 @@ class Manager:
 
         # TODO: Check available space before continuing 
 
-        executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, diff, secure_links)
+        executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, self.support, diff, secure_links)
         success = executor.setup()
         if not success:
             self.logger.error('Unable to proceed, not enough disk space')
@@ -166,7 +170,7 @@ class Manager:
 
         for dir in self.manifest.dirs:
             manifest_dir_path = os.path.join(self.path, dir.path)
-            dl_utils.prepare_location(dl_utils.get_case_insensitive_name(self.path, manifest_dir_path))
+            dl_utils.prepare_location(dl_utils.get_case_insensitive_name(manifest_dir_path))
         executor.run()
         
         dl_utils.prepare_location(manifests_dir)
