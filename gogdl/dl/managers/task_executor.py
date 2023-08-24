@@ -21,6 +21,7 @@ class ExecutingManager:
         self.api_handler = api_handler
         self.allowed_threads = allowed_threads
         self.path = path
+        self.resume_file = os.path.join(path, '.gogdl-resume')
         self.support = support or os.path.join(path, 'gog-support')
         self.cache = os.path.join(path, '.gogdl-download-cache')
         self.diff: generic.BaseDiff = diff
@@ -30,11 +31,9 @@ class ExecutingManager:
         self.download_size = 0
         self.disk_size = 0
 
-        self.downloaded_size = 0
-        self.written_size = 0
-
         self.shared_memory = None
         self.shm_segments = deque()
+        self.hash_map = dict()
         self.v2_chunks_to_download = deque()
         self.v1_chunks_to_download = deque()
         self.tasks = deque()
@@ -69,25 +68,38 @@ class ExecutingManager:
         current_tmp_size = 0
         # This can be either v1 File or v2 DepotFile
         for f in self.diff.deleted + self.diff.removed_redist:
-            self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.DELETE_FILE))
+            support_flag = generic.TaskFlag.SUPPORT if 'support' in f.flags else generic.TaskFlag.NONE
+            self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.DELETE_FILE | support_flag))
             if isinstance(f, v1.File):
                 required_disk_size_delta -= f.size
             elif isinstance(f, v2.DepotFile):
                 required_disk_size_delta -= sum([ch['size'] for ch in f.chunks])
 
         shared_chunks_counter = Counter()
+        completed_files = set()
         downloaded_v1 = dict()
         cached = set()
 
         self.biggest_chunk = 0
         # Find biggest chunk to optimize how much memory is 'wasted' per chunk
+        # Also create hashmap for those files
         for f in self.diff.new + self.diff.changed + self.diff.redist:
-            if isinstance(f, v2.DepotFile):
+            if isinstance(f, v1.File):
+                self.hash_map.update({f.path.lower(): f.hash})
+
+            elif isinstance(f, v2.DepotFile):
+                first_chunk_checksum = f.chunks[0]['md5'] if len(f.chunks) else None
+                checksum = f.md5 or f.sha256 or first_chunk_checksum
+                self.hash_map.update({f.path.lower(): checksum})
                 for i, chunk in enumerate(f.chunks):
                     shared_chunks_counter[chunk["compressedMd5"]] += 1
                     if self.biggest_chunk < chunk["size"]:
                         self.biggest_chunk = chunk["size"]
+
             elif isinstance(f, v2.FileDiff):
+                first_chunk_checksum = f.file.chunks[0]['md5'] if len(f.file.chunks) else None
+                checksum = f.file.md5 or f.file.sha256 or first_chunk_checksum
+                self.hash_map.update({f.file.path.lower(): checksum})
                 for i, chunk in enumerate(f.file.chunks):
                     if not chunk.get("old_offset"):
                         shared_chunks_counter[chunk["compressedMd5"]] += 1
@@ -99,6 +111,41 @@ class ExecutingManager:
             # Have at least 8 MiB chunk size for V1 downloads
             self.biggest_chunk = max(self.biggest_chunk, 8 * 1024 * 1024)
 
+        if os.path.exists(self.resume_file):
+            self.logger.info("Attempting to continue the download")
+            try:
+                missing = 0
+                mismatch = 0
+
+                with open(self.resume_file, 'r') as f:
+                    for line in f.readlines():
+                        hash, support, file_path = line.strip().split(':')
+                        
+                        if support == 'support':
+                            abs_path = os.path.join(self.support, file_path)
+                        else:
+                            abs_path = os.path.join(self.path, file_path)
+
+                        if not os.path.exists(dl_utils.get_case_insensitive_name(abs_path)):
+                            missing += 1
+                            continue
+                        
+                        current_hash = self.hash_map.get(file_path.lower())
+                        if current_hash != hash:
+                            print(file_path, current_hash, hash)
+                            mismatch += 1
+                            continue
+
+                        completed_files.add(file_path.lower())
+                if missing:
+                    self.logger.warning(f'There are {missing} missing files, and will be re-downloaded')
+                if mismatch:
+                    self.logger.warning(f'There are {mismatch} changed files since last download, and will be re-downloaded')
+
+            except Exception as e:
+                self.logger.error(f"Unable to resume download, continuing as normal {e}")
+
+
         # Create tasks for each chunk
         for f in self.diff.new + self.diff.changed + self.diff.redist:
             if isinstance(f, v1.File):
@@ -106,10 +153,12 @@ class ExecutingManager:
                 if f.size == 0:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE | support_flag))
                     continue
-                
+
+                if f.path.lower() in completed_files:
+                    downloaded_v1[f.hash] = f
+                    continue
+
                 required_disk_size_delta += f.size
-                self.download_size += f.size
-                self.disk_size += f.size
                 # In case of same file we can copy it over
                 if f.hash in downloaded_v1:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.COPY_FILE | support_flag, old_flags=generic.TaskFlag.SUPPORT if 'support' in downloaded_v1[f.hash].flags else generic.TaskFlag.NONE, old_file=downloaded_v1[f.hash].path))
@@ -117,6 +166,8 @@ class ExecutingManager:
                         self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
                     continue
                 self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.OPEN_FILE | support_flag))
+                self.download_size += f.size
+                self.disk_size += f.size
                 size_left = f.size
                 chunk_offset = 0
                 i = 0
@@ -144,21 +195,23 @@ class ExecutingManager:
                 if not len(f.chunks):
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE | support_flag))
                     continue
+                if f.path.lower() in completed_files:
+                    continue
                 self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.OPEN_FILE | support_flag))
                 for i, chunk in enumerate(f.chunks):
                     new_task = generic.ChunkTask(f.product_id, i, chunk["compressedMd5"], chunk["md5"], chunk["size"], chunk["compressedSize"])
-                    is_cached = chunk["compressedMd5"] in cached
+                    is_cached = chunk["md5"] in cached
                     if shared_chunks_counter[chunk["compressedMd5"]] > 1 and not is_cached:
                         self.v2_chunks_to_download.append((f.product_id, chunk["compressedMd5"]))
                         self.download_size += chunk['compressedSize']
                         new_task.offload_to_cache = True
-                        cached.add(chunk["compressedMd5"])
+                        cached.add(chunk["md5"])
                         current_tmp_size += chunk['size']
                     elif is_cached:
                         new_task.old_offset = 0
                         # This can safely be absolute path, due to
                         # how os.path.join works in Writer
-                        new_task.old_file = os.path.join(self.cache, chunk["compressedMd5"])
+                        new_task.old_file = os.path.join(self.cache, chunk["md5"])
                     else:
                         self.v2_chunks_to_download.append((f.product_id, chunk["compressedMd5"]))
                         self.download_size += chunk['compressedSize']
@@ -177,6 +230,8 @@ class ExecutingManager:
                 file_size = 0
                 support_flag = generic.TaskFlag.SUPPORT if 'support' in f.file.flags else generic.TaskFlag.NONE
                 old_support_flag = generic.TaskFlag.SUPPORT if 'support' in f.old_file_flags else generic.TaskFlag.NONE
+                if f.file.path.lower() in completed_files:
+                    continue
                 for i, chunk in enumerate(f.file.chunks):
                     chunk_task = generic.ChunkTask(f.file.product_id, i, chunk["compressedMd5"], chunk["md5"], chunk["size"], chunk["compressedSize"])
                     file_size += chunk['size']
@@ -186,16 +241,16 @@ class ExecutingManager:
                         chunk_task.old_file = f.file.path
                         reused += 1
                     else:
-                        is_cached = chunk["compressedMd5"] in cached
+                        is_cached = chunk["md5"] in cached
                         if shared_chunks_counter[chunk["compressedMd5"]] > 1 and not is_cached:
                             self.v2_chunks_to_download.append((f.file.product_id, chunk["compressedMd5"]))
                             self.download_size += chunk['compressedSize']
                             chunk_task.offload_to_cache = True
-                            cached.add(chunk["compressedMd5"])
+                            cached.add(chunk["md5"])
                             current_tmp_size += chunk['size']
                         elif is_cached:
                             chunk_task.old_offset = 0
-                            chunk_task.old_file = os.path.join(self.cache, chunk["compressedMd5"])
+                            chunk_task.old_file = os.path.join(self.cache, chunk["md5"])
                         else:
                             self.v2_chunks_to_download.append((f.file.product_id, chunk["compressedMd5"]))
                             self.download_size += chunk['compressedSize']
@@ -289,9 +344,10 @@ class ExecutingManager:
             self.shared_memory.close()
             self.shared_memory.unlink()
             self.shared_memory = None
-            return
+            return True
         
         self.shutdown()
+        return
 
     def shutdown(self):
         self.logger.debug("Stopping progressbar")
@@ -327,6 +383,11 @@ class ExecutingManager:
 
         with self.shm_cond:
             self.shm_cond.notify()
+
+        try:
+            os.remove(self.resume_file)
+        except:
+            self.logger.error("Failed to remove resume file")
 
     def download_manager(self, task_cond: Condition, shm_cond: Condition):
         self.logger.debug("Starting download scheduler")
@@ -433,7 +494,7 @@ class ExecutingManager:
                         flags |= generic.TaskFlag.OFFLOAD_TO_CACHE
                     if task.old_flags & generic.TaskFlag.SUPPORT:
                         old_destination = self.support
-                    self.writer_queue.put(task_executor.WriterTask(current_dest, current_file, flags=flags, shared_memory=shm, old_destination=old_destination, old_file=task.old_file, old_offset=task.old_offset, size=task.size, hash=task.compressed_md5), timeout=1)
+                    self.writer_queue.put(task_executor.WriterTask(current_dest, current_file, flags=flags, shared_memory=shm, old_destination=old_destination, old_file=task.old_file, old_offset=task.old_offset, size=task.size, hash=task.md5), timeout=1)
                 except Exception as e:
                     self.logger.error(f"Adding to writer queue failed {e}")
                     break
@@ -482,6 +543,21 @@ class ExecutingManager:
                 if isinstance(res.task, generic.TerminateWorker):
                     break
                 
+                if res.success and res.task.flags & generic.TaskFlag.CLOSE_FILE:
+                    if res.task.file_path.endswith('.tmp'):
+                        res.task.file_path = res.task.file_path[:-4]
+                    checksum = self.hash_map.get(res.task.file_path.lower())
+                    if not checksum:
+                        self.logger.warning(f"No checksum for closed file, unable to push to resume file {res.task.file_path}")
+                    else:
+                        if res.task.flags & generic.TaskFlag.SUPPORT:
+                            support = "support"
+                        else:
+                            support = ""
+
+                        with open(self.resume_file, 'a') as f:
+                            f.write(f"{checksum}:{support}:{res.task.file_path}\n")
+
                 if not res.success:
                     self.logger.fatal("Task writer failed")
 

@@ -276,6 +276,8 @@ class Writer(Process):
                 except Exception:
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
+                self.results_queue.put(WriterTaskResult(True, task))
+                continue
 
             elif task.flags & TaskFlag.RENAME_FILE:
                 if file_handle and task.file_path == current_file:

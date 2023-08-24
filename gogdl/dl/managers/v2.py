@@ -11,8 +11,6 @@ from gogdl import constants
 import os
 import logging
 
-manifests_dir = os.path.join(constants.CONFIG_DIR, "manifests")
-
 
 class Manager:
     def __init__(self, generic_manager):
@@ -79,21 +77,7 @@ class Manager:
         return response
 
     def download(self):
-        self.get_meta()
-        dlcs_user_owns = self.get_dlcs_user_owns(
-            requested_dlcs=self.dlcs_list
-        )
-    
-        if self.arguments.dlcs_list:
-            self.logger.info(f"Requested dlcs {self.arguments.dlcs_list}")
-            self.logger.info(f"Owned dlcs {dlcs_user_owns}")
-        self.logger.debug("Parsing manifest")
-
-        self.manifest = v2.Manifest(
-            self.meta, self.lang, dlcs_user_owns, self.api_handler, self.dlc_only
-        )
-
-        manifest_path = os.path.join(manifests_dir, self.game_id)
+        manifest_path = os.path.join(constants.MANIFESTS_DIR, self.game_id)
         old_manifest = None
 
         # Load old manifest
@@ -112,7 +96,24 @@ class Manager:
             if old_manifest:
                 self.logger.warning("Verifying - ignoring obtained manifest in favor of existing one")
                 self.manifest = old_manifest
+                dlcs_user_owns = self.manifest.dlcs or []
                 old_manifest = None
+            else:
+                raise Exception("No manifest stored locally, unable to verify")
+        else:
+            self.get_meta()
+            dlcs_user_owns = self.get_dlcs_user_owns(
+                requested_dlcs=self.dlcs_list
+            )
+    
+            if self.arguments.dlcs_list:
+                self.logger.info(f"Requested dlcs {self.arguments.dlcs_list}")
+                self.logger.info(f"Owned dlcs {dlcs_user_owns}")
+
+            self.logger.debug("Parsing manifest")
+            self.manifest = v2.Manifest(
+                self.meta, self.lang, dlcs_user_owns, self.api_handler, self.dlc_only
+            )
 
         if self.manifest:
             self.logger.debug("Requesting files of primary manifest")
@@ -161,8 +162,66 @@ class Manager:
                     'redist': dl_utils.get_dependency_link(self.api_handler)
                 }
             )
+        
+        if self.is_verifying:
+            new_diff = v2.ManifestDiff()
+            invalid = 0
 
-        # TODO: Check available space before continuing 
+            for file in diff.new:
+                if len(file.chunks) == 0:
+                    continue
+                if 'support' in file.flags:
+                    file_path = os.path.join(self.support, file.path)
+                else:
+                    file_path = os.path.join(self.path, file.path)
+                file_path = dl_utils.get_case_insensitive_name(file_path)
+                if not os.path.exists(file_path):
+                    invalid += 1
+                    new_diff.new.append(file)
+                    continue
+                valid = True
+                with open(file_path, 'rb') as fh:
+                    for chunk in file.chunks:
+                        chunk_sum  = hashlib.md5()
+                        chunk_data = fh.read(chunk['size'])
+                        chunk_sum.update(chunk_data)
+
+                        if chunk_sum.hexdigest() != chunk['md5']:
+                            valid = False
+                            break
+                if not valid:
+                    invalid += 1
+                    new_diff.new.append(file)
+                    continue
+
+            for file in diff.redist:
+                if len(file.chunks) == 0:
+                    continue
+                file_path = dl_utils.get_case_insensitive_name(os.path.join(self.path, file.path))
+                if not os.path.exists(file_path):
+                    invalid += 1
+                    new_diff.redist.append(file)
+                    continue
+                valid = True
+                with open(file_path, 'rb') as fh:
+                    for chunk in file.chunks:
+                        chunk_sum  = hashlib.md5()
+                        chunk_data = fh.read(chunk['size'])
+                        chunk_sum.update(chunk_data)
+
+                        if chunk_sum.hexdigest() != chunk['md5']:
+                            valid = False
+                            break
+                if not valid:
+                    invalid += 1
+                    new_diff.redist.append(file)
+                    continue
+            if not invalid:
+                self.logger.info("All files look good")
+                return
+
+            self.logger.info(f"Found {invalid} broken files, repairing...")
+            diff = new_diff
 
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, self.support, diff, secure_links)
         success = executor.setup()
@@ -174,9 +233,12 @@ class Manager:
         for dir in self.manifest.dirs:
             manifest_dir_path = os.path.join(self.path, dir.path)
             dl_utils.prepare_location(dl_utils.get_case_insensitive_name(manifest_dir_path))
-        executor.run()
+        cancelled = executor.run()
+
+        if cancelled:
+            return
         
-        dl_utils.prepare_location(manifests_dir)
+        dl_utils.prepare_location(constants.MANIFESTS_DIR)
         if self.manifest:
             with open(manifest_path, 'w') as f_handle:
                 data = self.manifest.serialize_to_json()

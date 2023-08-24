@@ -111,7 +111,10 @@ class DependenciesManager:
         if not success:
             self.logger.error('Unable to proceed, not enough disk space')
             exit(2)
-        executor.run()
+        cancelled = executor.run()
+
+        if cancelled:
+            return
 
         repository = self.repository 
         repository['HGLInstalled'] = list(installed)

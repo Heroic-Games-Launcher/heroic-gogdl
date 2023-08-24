@@ -58,7 +58,7 @@ class V1Task:
     index: int
     offset: int
     size: int
-    file_hash: str
+    md5: str
     cleanup: Optional[bool] = True
 
     old_offset: Optional[int] = None
@@ -70,7 +70,7 @@ class V1Task:
     # if we should push it to writer
     @property
     def compressed_md5(self):
-        return self.file_hash + "_" + str(self.index)
+        return self.md5 + "_" + str(self.index)
 
 @dataclass
 class FileTask:

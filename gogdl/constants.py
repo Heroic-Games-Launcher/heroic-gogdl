@@ -27,3 +27,5 @@ elif platform == 'darwin':
 
 if os.getenv("GOGDL_CONFIG_PATH"):
     CONFIG_DIR = os.path.join(os.getenv("GOGDL_CONFIG_PATH"), "heroic_gogdl")
+
+MANIFESTS_DIR = os.path.join(CONFIG_DIR, "manifests")

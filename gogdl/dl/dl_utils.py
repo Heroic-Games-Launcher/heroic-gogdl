@@ -29,8 +29,7 @@ def get_zlib_encoded(api_handler, url):
             try:
                 decompressed = json.loads(zlib.decompress(x.content, 15))
             except zlib.error:
-                retries-=1
-                continue
+                return x.json(), x.headers
             return decompressed, x.headers
         except Exception:
             retries-=1

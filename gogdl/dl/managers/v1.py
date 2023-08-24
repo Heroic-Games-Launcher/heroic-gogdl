@@ -1,5 +1,6 @@
 # Handle old games downloading via V1 depot system
 # V1 is there since GOG 1.0 days, it has no compression and relies on downloading chunks from big main.bin file
+import hashlib
 from sys import exit
 import os 
 import logging
@@ -12,7 +13,6 @@ from gogdl.dl.managers.task_executor import ExecutingManager
 from gogdl.dl.workers.task_executor import DownloadTask1, DownloadTask2, WriterTask
 from gogdl.dl.objects import v1
 
-manifests_dir = os.path.join(constants.CONFIG_DIR, "manifests")
 
 class Manager:
     def __init__(self, generic_manager):
@@ -59,7 +59,7 @@ class Manager:
     # Get manifest of selected build
     def get_meta(self):
         meta_url = self.build["link"]
-        self.meta, headers = dl_utils.get_zlib_encoded(self.api_handler,meta_url)
+        self.meta, headers = dl_utils.get_zlib_encoded(self.api_handler, meta_url)
         if not self.meta:
             raise Exception("There was an error obtaining meta")
         if headers:
@@ -121,17 +121,7 @@ class Manager:
 
 
     def download(self):
-        self.get_meta()
-        dlcs_user_owns = self.get_dlcs_user_owns(requested_dlcs=self.dlcs_list)
-
-        if self.arguments.dlcs_list:
-            self.logger.info(f"Requested dlcs {self.arguments.dlcs_list}")
-            self.logger.info(f"Owned dlcs {dlcs_user_owns}")
-        self.logger.debug("Parsing manifest")
-
-        self.manifest = v1.Manifest(self.platform, self.meta, self.lang, dlcs_user_owns, self.api_handler, self.dlc_only)
-
-        manifest_path = os.path.join(manifests_dir, self.game_id)
+        manifest_path = os.path.join(constants.MANIFESTS_DIR, self.game_id)
         old_manifest = None
 
         # Load old manifest
@@ -148,6 +138,18 @@ class Manager:
             if old_manifest:
                 self.manifest = old_manifest
                 old_manifest = None
+                dlcs_user_owns = self.manifest.dlcs or []
+            else:
+                raise Exception("No manifest stored locally, unable to verify")
+        else:
+            self.get_meta()
+            dlcs_user_owns = self.get_dlcs_user_owns(requested_dlcs=self.dlcs_list)
+
+            if self.arguments.dlcs_list:
+                self.logger.info(f"Requested dlcs {self.arguments.dlcs_list}")
+                self.logger.info(f"Owned dlcs {dlcs_user_owns}")
+            self.logger.debug("Parsing manifest")
+            self.manifest = v1.Manifest(self.platform, self.meta, self.lang, dlcs_user_owns, self.api_handler, self.dlc_only)
 
         if self.manifest:
             self.manifest.get_files()
@@ -170,7 +172,7 @@ class Manager:
             secure_links.update(
                 {
                     product_id: dl_utils.get_secure_link(
-                        self.api_handler, f"/{self.platform}/{self.build['legacy_build_id']}/", product_id, generation=1
+                        self.api_handler, f"/{self.platform}/{self.manifest.data['product']['timestamp']}/", product_id, generation=1
                     )
                 }
             )
@@ -194,6 +196,66 @@ class Manager:
         if not len(diff.changed) and not len(diff.deleted) and not len(diff.new) and not len(diff.redist) and not len(diff.removed_redist):
             self.logger.info("Nothing to do")
             return
+
+        if self.is_verifying:
+            new_diff = v1.ManifestDiff()
+            invalid = 0
+            for file in diff.new:
+                # V1 only files
+                if not file.size:
+                    continue
+
+                if 'support' in file.flags:
+                    file_path = os.path.join(self.support, file.path)
+                else:
+                    file_path = os.path.join(self.path, file.path)
+                file_path = dl_utils.get_case_insensitive_name(file_path)
+
+                if not os.path.exists(file_path):
+                    invalid += 1
+                    new_diff.new.append(file)
+                    continue
+
+                with open(file_path, 'rb') as fh:
+                    file_sum  = hashlib.md5()
+                    
+                    while chunk := fh.read(8 * 1024 * 1024):
+                        file_sum.update(chunk)
+
+                    if file_sum.hexdigest() != file.hash:
+                        invalid += 1
+                        new_diff.new.append(file)
+                        continue
+
+            for file in diff.redist:
+                if len(file.chunks) == 0:
+                    continue
+                file_path = dl_utils.get_case_insensitive_name(os.path.join(self.path, file.path))
+                if not os.path.exists(file_path):
+                    invalid += 1
+                    new_diff.redist.append(file)
+                    continue
+                valid = True
+                with open(file_path, 'rb') as fh:
+                    for chunk in file.chunks:
+                        chunk_sum  = hashlib.md5()
+                        chunk_data = fh.read(chunk['size'])
+                        chunk_sum.update(chunk_data)
+
+                        if chunk_sum.hexdigest() != chunk['md5']:
+                            valid = False
+                            break
+                if not valid:
+                    invalid += 1
+                    new_diff.redist.append(file)
+                    continue
+            if not invalid:
+                self.logger.info("All files look good")
+                return
+
+            self.logger.info(f"Found {invalid} broken files, repairing...")
+            diff = new_diff
+
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, self.support, diff, secure_links)
         success = executor.setup()
         if not success:
@@ -205,9 +267,12 @@ class Manager:
             manifest_dir_path = os.path.join(self.path, dir.path)
             dl_utils.prepare_location(dl_utils.get_case_insensitive_name(manifest_dir_path))
 
-        executor.run()
+        cancelled = executor.run()
 
-        dl_utils.prepare_location(manifests_dir)
+        if cancelled:
+            return
+
+        dl_utils.prepare_location(constants.MANIFESTS_DIR)
         if self.manifest:
             with open(manifest_path, 'w') as f_handle:
                 data = self.manifest.serialize_to_json()
