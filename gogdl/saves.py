@@ -22,7 +22,7 @@ class SyncAction(Enum):
 
 class SyncFile:
     def __init__(self, path, abs_path, md5=None, update_time=None):
-        self.relative_path =  path.replace(os.sep, '/')  # cloud file identifier
+        self.relative_path = path.replace('\\', '/')  # cloud file identifier
         self.absolute_path = abs_path
         self.md5 = md5
         self.update_time = update_time
