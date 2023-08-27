@@ -226,7 +226,7 @@ class Manager:
         executor = ExecutingManager(self.api_handler, self.allowed_threads, self.path, self.support, diff, secure_links)
         success = executor.setup()
         if not success:
-            self.logger.error('Unable to proceed, not enough disk space')
+            print('Unable to proceed, Not enough disk space')
             exit(2)
         dl_utils.prepare_location(self.path)
 

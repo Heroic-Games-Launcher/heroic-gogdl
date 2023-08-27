@@ -109,7 +109,7 @@ class DependenciesManager:
         executor = ExecutingManager(self.api, self.workers_count, self.path, os.path.join(self.path, 'gog-support'), diff, {'redist': secure_link})
         success = executor.setup()
         if not success:
-            self.logger.error('Unable to proceed, not enough disk space')
+            print('Unable to proceed, Not enough disk space')
             exit(2)
         cancelled = executor.run()
 

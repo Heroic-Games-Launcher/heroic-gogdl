@@ -77,6 +77,10 @@ class ExecutingManager:
 
         shared_chunks_counter = Counter()
         completed_files = set()
+
+        missing_files = set()
+        mismatched_files = set()
+
         downloaded_v1 = dict()
         cached = set()
 
@@ -127,12 +131,13 @@ class ExecutingManager:
                             abs_path = os.path.join(self.path, file_path)
 
                         if not os.path.exists(dl_utils.get_case_insensitive_name(abs_path)):
+                            missing_files.add(file_path.lower())
                             missing += 1
                             continue
                         
                         current_hash = self.hash_map.get(file_path.lower())
                         if current_hash != hash:
-                            print(file_path, current_hash, hash)
+                            mismatched_files.add(file_path.lower())
                             mismatch += 1
                             continue
 
@@ -235,7 +240,7 @@ class ExecutingManager:
                 for i, chunk in enumerate(f.file.chunks):
                     chunk_task = generic.ChunkTask(f.file.product_id, i, chunk["compressedMd5"], chunk["md5"], chunk["size"], chunk["compressedSize"])
                     file_size += chunk['size']
-                    if chunk.get("old_offset"):
+                    if chunk.get("old_offset") and f.file.path.lower() not in mismatched_files and f.file.path.lower() not in missing_files:
                         chunk_task.old_offset = chunk["old_offset"]
                         chunk_task.old_flags = old_support_flag
                         chunk_task.old_file = f.file.path
