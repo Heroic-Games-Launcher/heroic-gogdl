@@ -83,6 +83,11 @@ class ExecutingManager:
 
         downloaded_v1 = dict()
         cached = set()
+        
+        # Re-use cachces
+        if os.path.exists(self.cache):
+            for cache_file in os.listdir(self.cache):
+                cached.add(cache_file)
 
         self.biggest_chunk = 0
         # Find biggest chunk to optimize how much memory is 'wasted' per chunk
@@ -210,6 +215,7 @@ class ExecutingManager:
                         self.v2_chunks_to_download.append((f.product_id, chunk["compressedMd5"]))
                         self.download_size += chunk['compressedSize']
                         new_task.offload_to_cache = True
+                        new_task.cleanup = True
                         cached.add(chunk["md5"])
                         current_tmp_size += chunk['size']
                     elif is_cached:
@@ -223,8 +229,12 @@ class ExecutingManager:
                     self.disk_size += chunk['size']
                     current_tmp_size += chunk['size']
                     shared_chunks_counter[chunk["compressedMd5"]] -= 1
-                    new_task.cleanup = shared_chunks_counter[chunk["compressedMd5"]] == 0
+                    new_task.cleanup = True
                     self.tasks.append(new_task)
+                    if is_cached and shared_chunks_counter[chunk["compressedMd5"]] == 0:
+                        cached.remove(chunk["md5"])
+                        self.tasks.append(generic.FileTask(os.path.join(self.cache, chunk["md5"]), flags=generic.TaskFlag.DELETE_FILE))
+                        current_tmp_size -= chunk['size']
                 self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CLOSE_FILE | support_flag))
                 if 'executable' in f.flags:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
@@ -245,6 +255,8 @@ class ExecutingManager:
                         chunk_task.old_flags = old_support_flag
                         chunk_task.old_file = f.file.path
                         reused += 1
+
+                        chunk_tasks.append(chunk_task)
                     else:
                         is_cached = chunk["md5"] in cached
                         if shared_chunks_counter[chunk["compressedMd5"]] > 1 and not is_cached:
@@ -261,8 +273,12 @@ class ExecutingManager:
                             self.download_size += chunk['compressedSize']
 
                         shared_chunks_counter[chunk["compressedMd5"]] -= 1
-                        chunk_task.cleanup = shared_chunks_counter[chunk["compressedMd5"]] == 0
-                    chunk_tasks.append(chunk_task)
+                        chunk_task.cleanup = True
+                        chunk_tasks.append(chunk_task)
+                        if is_cached and shared_chunks_counter[chunk["compressedMd5"]] == 0:
+                            cached.remove(chunk["md5"])
+                            self.tasks.append(generic.FileTask(os.path.join(self.cache, chunk["md5"]), flags=generic.TaskFlag.DELETE_FILE))
+                            current_tmp_size -= chunk['size']
                 current_tmp_size += file_size
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
                 if reused:
@@ -435,13 +451,13 @@ class ExecutingManager:
             else:
                 with task_cond:
                     self.logger.debug("Waiting for more tasks")
-                    task_cond.wait(timeout=5.0)
+                    task_cond.wait(timeout=1.0)
                     continue
 
             if no_shm:
                 with shm_cond:
                     self.logger.debug(f"Waiting for more memory")
-                    shm_cond.wait(timeout=5.0)
+                    shm_cond.wait(timeout=1.0)
 
         self.logger.debug("Download scheduler out..")
 
@@ -570,8 +586,8 @@ class ExecutingManager:
                 if res.task.flags & generic.TaskFlag.RELEASE_MEM and res.task.shared_memory:
                     self.logger.debug(f"Releasing memory {res.task.shared_memory}")
                     self.shm_segments.appendleft(res.task.shared_memory)
-                    with shm_cond:
-                        shm_cond.notify()
+                with shm_cond:
+                    shm_cond.notify()
                 self.processed_items += 1
 
             except Empty:
