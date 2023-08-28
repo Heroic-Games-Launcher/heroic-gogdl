@@ -37,7 +37,7 @@ class Manager:
         self.target_build = None
 
     def get_builds(self, build_platform):
-        password = '' if not self.arguments.password else '&' + self.arguments.password
+        password = '' if not self.arguments.password else '&password=' + self.arguments.password
         generation = self.arguments.force_generation or "2"
         response = self.api_handler.session.get(
             f"{constants.GOG_CONTENT_SYSTEM}/products/{self.game_id}/os/{build_platform}/builds?&generation={generation}{password}"
