@@ -76,13 +76,13 @@ class DependenciesManager:
                 # By default we want to download all redist beginning
                 # with redist (game installation runs installation of the game's ones)
                 should_download = depot["executable"]["path"].startswith("__redist")
-                installed.add(depot['dependencyId'])
                 
                 # If we want to download redist located in game dir we flip the boolean
                 if self.download_game_deps_only:
                     should_download = not should_download
 
                 if should_download:
+                    installed.add(depot['dependencyId'])
                     new_depots.append(depot)
 
         new_files = []
