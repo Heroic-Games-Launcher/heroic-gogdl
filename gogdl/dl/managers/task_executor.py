@@ -1,7 +1,8 @@
 import logging
 import os
+import signal
 import time
-import math
+from sys import exit
 from threading import Thread
 from collections import deque
 from multiprocessing import Queue, Manager as ProcessingManager
@@ -311,12 +312,17 @@ class ExecutingManager:
             segment = generic.MemorySegment(offset=i*chunk_size, end=i*chunk_size+chunk_size)
             self.shm_segments.append(segment)
         self.logger.debug(f"Created shm segments {len(self.shm_segments)}, chunk size = {self.biggest_chunk / 1024 / 1024:.02f} MiB")
+        interrupted = False
+        def handle_sig(num, frame):
+            nonlocal interrupted
+            self.interrupt_shutdown()
+            interrupted = True
+            exit(-num)
 
         try:
             self.threads.append(Thread(target=self.download_manager, args=(self.task_cond, self.shm_cond)))
             self.threads.append(Thread(target=self.process_task_results, args=(self.task_cond,)))
             self.threads.append(Thread(target=self.process_writer_task_results, args=(self.shm_cond,)))
-
 
             # Spawn workers 
             for _ in range(self.allowed_threads):
@@ -327,48 +333,57 @@ class ExecutingManager:
             self.writer_worker = task_executor.Writer(self.shared_memory.name, self.writer_queue, self.writer_res_queue, self.cache)
             self.writer_worker.start()
 
-            if self.disk_size:
-                self.progress.start()
             [th.start() for th in self.threads]
 
-            while self.processed_items < self.items_to_complete:
+            signal.signal(signal.SIGTERM, handle_sig)
+            signal.signal(signal.SIGINT, handle_sig)
+
+            if self.disk_size:
+                self.progress.start()
+
+            while self.processed_items < self.items_to_complete and not interrupted:
                 time.sleep(1)
+            if interrupted:
+                return True
         except KeyboardInterrupt:
-            self.progress.completed = True
-            self.running = False
-            
-            with self.task_cond:
-                self.task_cond.notify()
-
-            with self.shm_cond:
-                self.shm_cond.notify()
-
-            for t in self.threads:
-                t.join(timeout=5.0)
-                if t.is_alive():
-                    self.logger.warning(f'Thread did not terminate! {repr(t)}')
-
-            for child in self.download_workers:
-                child.join(timeout=5.0)
-                if child.exitcode is None:
-                    child.terminate()
-            
-            # Clean queues
-            for queue in [self.writer_res_queue, self.writer_queue, self.download_queue, self.download_res_queue]:
-                try:
-                    while True:
-                        _ = queue.get_nowait()
-                except Empty:
-                    queue.close()
-                    queue.join_thread()
-
-            self.shared_memory.close()
-            self.shared_memory.unlink()
-            self.shared_memory = None
             return True
         
         self.shutdown()
         return
+
+    def interrupt_shutdown(self):
+        self.progress.completed = True
+        self.running = False
+            
+        with self.task_cond:
+            self.task_cond.notify()
+
+        with self.shm_cond:
+            self.shm_cond.notify()
+
+        for t in self.threads:
+            t.join(timeout=5.0)
+            if t.is_alive():
+                self.logger.warning(f'Thread did not terminate! {repr(t)}')
+
+        for child in self.download_workers:
+            child.join(timeout=5.0)
+            if child.exitcode is None:
+                child.terminate()
+            
+        # Clean queues
+        for queue in [self.writer_res_queue, self.writer_queue, self.download_queue, self.download_res_queue]:
+            try:
+                while True:
+                    _ = queue.get_nowait()
+            except Empty:
+                queue.close()
+                queue.join_thread()
+
+        self.shared_memory.close()
+        self.shared_memory.unlink()
+        self.shared_memory = None
+
 
     def shutdown(self):
         self.logger.debug("Stopping progressbar")
