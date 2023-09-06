@@ -220,7 +220,11 @@ class InstallerHandler:
         range_header = self.get_range_header(from_b_repr, end_b)
 
         response = self.session.get(self.url, headers={'Range': range_header},
-                                    allow_redirects=True, stream=raw_response)
+                                    allow_redirects=False, stream=raw_response)
+        if response.status_code == 302:
+            # Skip content-system API
+            self.url = response.headers.get('Location') or self.url
+            return self.get_bytes_from_file(from_b, size, add_archive_index, raw_response)
         if not self.file_size:
             self.file_size = int(response.headers.get("Content-Range").split("/")[-1])
         if raw_response:
