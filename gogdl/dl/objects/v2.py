@@ -21,6 +21,11 @@ class DepotFile:
 class DepotDirectory:
     def __init__(self, item_data):
         self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep).rstrip(os.sep)
+    
+class DepotLink:
+    def __init__(self, item_data):
+        self.path = item_data["path"]
+        self.target = item_data["target"]
 
 
 class Depot:
@@ -122,6 +127,8 @@ class Manifest:
             for item in manifest["depot"]["items"]:
                 if item["type"] == "DepotFile":
                     self.files.append(DepotFile(item, depot.product_id))
+                elif item["type"] == "DepotLink":
+                    self.files.append(DepotLink(item))
                 else:
                     self.dirs.append(DepotDirectory(item))
 
@@ -177,6 +184,8 @@ class ManifestDiff(generic.BaseDiff):
             if not old_file:
                 comparison.new.append(new_file)
             else:
+                if isinstance(new_file, DepotLink):
+                    continue
                 if is_manifest_upgrade:
                     if len(new_file.chunks) == 0:
                         continue

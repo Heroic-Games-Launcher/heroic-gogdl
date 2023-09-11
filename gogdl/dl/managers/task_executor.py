@@ -201,6 +201,8 @@ class ExecutingManager:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
                 downloaded_v1[f.hash] = f
 
+            elif isinstance(f, v2.DepotLink):
+                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_SYMLINK, old_file=f.target))
             elif isinstance(f, v2.DepotFile):
                 support_flag = generic.TaskFlag.SUPPORT if 'support' in f.flags else generic.TaskFlag.NONE
                 if not len(f.chunks):

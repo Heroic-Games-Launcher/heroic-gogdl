@@ -20,6 +20,7 @@ class TaskFlag(Flag):
     OPEN_FILE = auto()
     CLOSE_FILE = auto()
     CREATE_FILE = auto()
+    CREATE_SYMLINK = auto()
     RENAME_FILE = auto()
     COPY_FILE = auto()
     DELETE_FILE = auto()
