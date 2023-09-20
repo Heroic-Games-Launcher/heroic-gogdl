@@ -136,6 +136,8 @@ class Manager:
         dlcs = list()
         for dlc in self.game_data["expanded_dlcs"]:
             if self.api_handler.does_user_own(dlc["id"]):
+                if not dlc["downloads"]["installers"]:
+                    continue
                 dlc_languages = [installer["language"] for installer in
                                  self.filter_linux_installers(dlc["downloads"]["installers"])]
                 dlcs.append({"title": dlc["title"], "id": dlc["id"], "languages": [dlc_languages]})
