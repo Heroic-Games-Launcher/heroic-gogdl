@@ -181,11 +181,12 @@ class ManifestDiff(generic.BaseDiff):
 
         for new_file in new_files.values():
             old_file = old_files.get(new_file.path.lower())
+            if isinstance(new_file, DepotLink):
+                comparison.links.append(new_file)
+                continue
             if not old_file:
                 comparison.new.append(new_file)
             else:
-                if isinstance(new_file, DepotLink):
-                    continue
                 if is_manifest_upgrade:
                     if len(new_file.chunks) == 0:
                         continue

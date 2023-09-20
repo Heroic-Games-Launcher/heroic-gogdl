@@ -201,8 +201,6 @@ class ExecutingManager:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
                 downloaded_v1[f.hash] = f
 
-            elif isinstance(f, v2.DepotLink):
-                self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_SYMLINK, old_file=f.target))
             elif isinstance(f, v2.DepotFile):
                 support_flag = generic.TaskFlag.SUPPORT if 'support' in f.flags else generic.TaskFlag.NONE
                 if not len(f.chunks):
@@ -298,6 +296,9 @@ class ExecutingManager:
                     self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
                 self.disk_size += file_size
             required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
+            
+        for f in self.diff.links:
+            self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_SYMLINK, old_file=f.target))
 
         self.progress = ProgressBar(self.disk_size, get_readable_size(self.disk_size))
         self.items_to_complete = len(self.tasks)

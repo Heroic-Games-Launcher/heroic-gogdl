@@ -11,6 +11,8 @@ class BaseDiff:
         self.redist = []
         self.removed_redist = []
 
+        self.links = [] # Unix only
+
     def __str__(self):
         return f"Deleted: {len(self.deleted)} New: {len(self.new)} Changed: {len(self.changed)}"
 

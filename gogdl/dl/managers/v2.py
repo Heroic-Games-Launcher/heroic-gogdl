@@ -216,6 +216,12 @@ class Manager:
                     invalid += 1
                     new_diff.redist.append(file)
                     continue
+            for file in diff.links:
+                file_path = os.path.join(self.path, file.path)
+                file_path = dl_utils.get_case_insensitive_name(file_path)
+                if not os.path.exists(file_path):
+                    new_diff.links.append(file)
+
             if not invalid:
                 self.logger.info("All files look good")
                 return
