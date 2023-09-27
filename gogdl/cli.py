@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from multiprocessing import freeze_support
 import gogdl.args as args
 from gogdl.dl.managers import manager
 from gogdl.dl.managers import dependencies
@@ -62,4 +63,5 @@ def main():
 
 
 if __name__ == "__main__":
+    freeze_support()
     main()
