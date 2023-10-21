@@ -4,17 +4,19 @@ from queue import Empty
 import shutil
 import sys
 import stat
+import traceback
 import time
 import requests
 import zlib
 import hashlib
-from typing import Any, Optional, Union
+from typing import Optional, Union
 from copy import copy
 from gogdl.dl import dl_utils
 from dataclasses import dataclass
 from enum import Enum, auto
 from multiprocessing import Process, Queue
 from gogdl.dl.objects.generic import MemorySegment, TaskFlag, TerminateWorker
+from gogdl.xdelta import patcher
 
 
 class FailReason(Enum):
@@ -61,6 +63,7 @@ class WriterTask:
     old_file: Optional[str] = None
     old_offset: Optional[int] = None
 
+    patch_file: Optional[str] = None
 
 @dataclass
 class DownloadTaskResult:
@@ -313,6 +316,38 @@ class Writer(Process):
                     continue
 
                 self.results_queue.put(WriterTaskResult(True, task))
+                continue
+            
+            elif task.flags & TaskFlag.PATCH:
+                if file_handle and task.file_path == current_file:
+                    print("Patching on unclosed file")
+                    file_handle.close()
+                    file_handle = None
+
+                if not task.old_file or not task.patch_file:
+                    # if this ever happens....
+                    self.results_queue.put(WriterTaskResult(False, task))
+                    continue
+
+                try:
+                    dest = task.old_destination or task.destination
+                    source = os.path.join(dest, task.old_file)
+                    source = dl_utils.get_case_insensitive_name(source)
+                    patch = os.path.join(task.destination, task.patch_file)
+                    patch = dl_utils.get_case_insensitive_name(patch)
+                    target = task_path
+
+                    patcher.patch(source, patch, target)
+
+                except Exception as e:
+                    print("Patch failed", e)
+                    print(traceback.format_exc())
+                    self.results_queue.put(WriterTaskResult(False, task))
+                    continue
+                written = 0
+                if os.path.exists(target):
+                    written = os.path.getsize(target)
+                self.results_queue.put(WriterTaskResult(True, task, written=written))
                 continue
             
             elif task.flags & TaskFlag.DELETE_FILE:

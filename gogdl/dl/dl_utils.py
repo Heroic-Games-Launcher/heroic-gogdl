@@ -32,6 +32,7 @@ def get_zlib_encoded(api_handler, url):
                 return x.json(), x.headers
             return decompressed, x.headers
         except Exception:
+            time.sleep(2)
             retries-=1
     return None, None
 
@@ -50,12 +51,14 @@ def galaxy_path(manifest: str):
     return galaxy_path
 
 
-def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
+def get_secure_link(api_handler, path, gameId, generation=2, logger=None, root=None):
     url = ""
     if generation == 2:
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&generation=2&path={path}"
     elif generation == 1:
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&type=depot&path={path}"
+    if root:
+        url += f"&root={root}"
 
     try:
         r = requests.get(url, headers=api_handler.session.headers, timeout=TIMEOUT)

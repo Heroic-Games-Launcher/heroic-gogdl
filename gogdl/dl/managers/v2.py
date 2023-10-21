@@ -114,14 +114,18 @@ class Manager:
             self.manifest = v2.Manifest(
                 self.meta, self.lang, dlcs_user_owns, self.api_handler, self.dlc_only
             )
-
+        patch = None
         if self.manifest:
             self.logger.debug("Requesting files of primary manifest")
             self.manifest.get_files()
         if old_manifest:
             self.logger.debug("Requesting files of previous manifest")
             old_manifest.get_files()
-        diff = v2.ManifestDiff.compare(self.manifest, old_manifest)
+            patch = v2.Patch.get(self.manifest, old_manifest, self.lang, dlcs_user_owns, self.api_handler)
+            if not patch:
+                self.logger.info("No patch found, falling back to chunk based updates")
+
+        diff = v2.ManifestDiff.compare(self.manifest, old_manifest, patch)
         self.logger.info(diff)
 
 
@@ -154,7 +158,14 @@ class Manager:
                     )
                 }
             )
-
+            if patch:
+                secure_links.update(
+                    {
+                        f"{product_id}_patch": dl_utils.get_secure_link(
+                            self.api_handler, "/", product_id, root="/patches/store"
+                        )
+                    }
+                )
 
         if len(diff.redist) > 0:
             secure_links.update(
@@ -243,7 +254,7 @@ class Manager:
 
         if cancelled:
             return
-        
+
         dl_utils.prepare_location(constants.MANIFESTS_DIR)
         if self.manifest:
             with open(manifest_path, 'w') as f_handle:

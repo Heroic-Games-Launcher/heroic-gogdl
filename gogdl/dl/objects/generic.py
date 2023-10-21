@@ -28,6 +28,7 @@ class TaskFlag(Flag):
     DELETE_FILE = auto()
     OFFLOAD_TO_CACHE = auto()
     MAKE_EXE = auto()
+    PATCH = auto()
     RELEASE_MEM = auto()
 
 @dataclass
@@ -82,6 +83,8 @@ class FileTask:
 
     old_flags: TaskFlag = TaskFlag.NONE 
     old_file: Optional[str] = None
+
+    patch_file: Optional[str] = None
 
 
 @dataclass

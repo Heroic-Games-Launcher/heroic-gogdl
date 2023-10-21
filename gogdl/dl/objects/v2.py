@@ -50,7 +50,6 @@ class Depot:
                 break
         return status
 
-
 class Manifest:
     def __init__(self, meta, language, dlcs, api_handler, dlc_only):
         self.data = meta
@@ -153,13 +152,25 @@ class FileDiff:
         diff.file = new
         return diff
 
+# Using xdelta patching
+class FilePatchDiff:
+    def __init__(self, data):
+        self.md5_source = data['md5_source']
+        self.md5_target = data['md5_target']
+        self.source = data['path_source'].replace('\\', '/')
+        self.target = data['path_target'].replace('\\', '/')
+        self.md5 = data['md5']
+        self.chunks = data['chunks']
+
+        self.old_file: DepotFile
+        self.new_file: DepotFile
 
 class ManifestDiff(generic.BaseDiff):
     def __init__(self):
         super().__init__()
 
     @classmethod
-    def compare(cls, manifest, old_manifest=None):
+    def compare(cls, manifest, old_manifest=None, patch=None):
         comparison = cls()
         is_manifest_upgrade = isinstance(old_manifest, v1.Manifest)
 
@@ -195,13 +206,85 @@ class ManifestDiff(generic.BaseDiff):
                         if old_file.hash != new_final_sum:
                             comparison.changed.append(new_file)
                     continue
+
+                patch_file = None
+                if patch and len(old_file.chunks):
+                    for p_file in patch.files:
+                        old_final_sum = old_file.md5 or old_file.chunks[0]["md5"]
+                        if p_file.md5_source == old_final_sum:
+                            patch_file = p_file
+                            patch_file.old_file = old_file
+                            patch_file.new_file = new_file 
+
+                if patch_file:
+                    comparison.changed.append(patch_file)
+                    continue
+
                 if len(new_file.chunks) == 1 and len(old_file.chunks) == 1:
                     if new_file.chunks[0]["md5"] != old_file.chunks[0]["md5"]:
                         comparison.changed.append(new_file)
                 else:
-                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 != new_file.sha256):
+                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 and old_file.sha256 != new_file.sha256):
                         comparison.changed.append(FileDiff.compare(new_file, old_file))
                     elif len(new_file.chunks) != len(old_file.chunks):
                         comparison.changed.append(FileDiff.compare(new_file, old_file))
         return comparison
 
+class Patch:
+    def __init__(self):
+        self.patch_data = {}
+        self.files = []
+
+    @classmethod
+    def get(cls,  manifest, old_manifest, lang: str, dlcs: list, api_handler):
+        if isinstance(manifest, v1.Manifest) or isinstance(old_manifest, v1.Manifest):
+            return None
+        from_build = old_manifest.data['buildId']
+        to_build = manifest.data['buildId']
+        dlc_ids = [dlc["id"] for dlc in dlcs]
+        patch_meta = dl_utils.get_zlib_encoded(api_handler, f'{constants.GOG_CONTENT_SYSTEM}/products/{manifest.product_id}/patches?_version=4&from_build_id={from_build}&to_build_id={to_build}')[0]
+        if not patch_meta or patch_meta.get('error'):
+            return None
+        patch_data = dl_utils.get_zlib_encoded(api_handler, patch_meta['link'])[0]
+        if not patch_data:
+            return None
+         
+        if patch_data['algorithm'] != 'xdelta3':
+            print("Unsupported patch algorithm")
+            return None
+        
+        depots = []
+        # Get depots we need
+        for depot in patch_data['depots']:
+            if depot['productId'] == patch_data['baseProductId'] or depot['productId'] in dlc_ids:
+                if lang in depot['languages']:
+                    depots.append(depot)
+
+        if not depots:
+            return None
+
+        files = []
+        fail = False
+        for depot in depots:
+            depotdiffs = dl_utils.get_zlib_encoded(api_handler, f'{constants.GOG_CDN}/content-system/v2/patches/meta/{dl_utils.galaxy_path(depot["manifest"])}')[0]
+            if not depotdiffs:
+                fail = True
+                break
+            for diff in depotdiffs['depot']['items']:
+                if diff['type'] == 'DepotDiff':
+                   files.append(FilePatchDiff(diff))
+                else:
+                    print('Unknown type in patcher', diff['type'])
+                    return None
+    
+        if fail:
+            # TODO: Handle this beter
+            # Maybe exception?
+            print("Failed to get patch manifests")
+            return None
+        
+        patch = cls()
+        patch.patch_data = patch_data
+        patch.files = files
+
+        return patch
