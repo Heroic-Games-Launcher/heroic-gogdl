@@ -333,6 +333,7 @@ class ExecutingManager:
                     self.download_size += chunk['compressedSize']
                     chunk_tasks.append(chunk_task)
 
+                self.disk_size += patch_size
                 current_tmp_size += patch_size 
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
 
