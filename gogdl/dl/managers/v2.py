@@ -1,6 +1,7 @@
 # Handle newer depots download
 # This was introduced in GOG Galaxy 2.0, it features compression and files split by chunks
 import json
+from sys import exit
 from gogdl.dl import dl_utils
 import gogdl.dl.objects.v2 as v2
 import hashlib
