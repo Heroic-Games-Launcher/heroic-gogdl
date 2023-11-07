@@ -74,7 +74,17 @@ class Manager:
         dlcs = self.get_dlcs_user_owns(True)
         self.manifest = v1.Manifest(self.platform, self.meta, self.lang, dlcs, self.api_handler, False)
 
+        build = self.api_handler.get_dependencies_repo()
+        repository = dl_utils.get_zlib_encoded(self.api_handler, build['repository_manifest'])[0] or {}
+
         size_data = self.manifest.calculate_download_size()
+
+        for depot in repository["depots"]:
+            if depot["dependencyId"] in self.manifest.dependencies_ids:
+                if not depot["executable"]["path"].startswith("__redist"):
+                    size_data[self.game_id]['*']["download_size"] += depot["compressedSize"]
+                    size_data[self.game_id]['*']["disk_size"] += depot["size"]
+
         available_branches = set([build["branch"] for build in self.builds["items"] if build["branch"]])
         available_branches_list = [None] + list(available_branches)
 

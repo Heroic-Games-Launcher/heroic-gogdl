@@ -108,6 +108,8 @@ class Manifest:
                     data[product_id] = dict()
                 product_data = data[product_id]
                 for lang in depot.languages:
+                    if lang == "Neutral":
+                        lang = "*"
                     if not lang in product_data:
                         product_data[lang] = {"download_size": 0, "disk_size": 0}
                     
