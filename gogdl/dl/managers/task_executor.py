@@ -66,7 +66,7 @@ class ExecutingManager:
 
         # Required space for download to succeed
         required_disk_size_delta = 0
-        current_tmp_size = 0
+
         # This can be either v1 File or v2 DepotFile
         for f in self.diff.deleted + self.diff.removed_redist:
             support_flag = generic.TaskFlag.SUPPORT if 'support' in f.flags else generic.TaskFlag.NONE
@@ -75,6 +75,8 @@ class ExecutingManager:
                 required_disk_size_delta -= f.size
             elif isinstance(f, v2.DepotFile):
                 required_disk_size_delta -= sum([ch['size'] for ch in f.chunks])
+
+        current_tmp_size = required_disk_size_delta
 
         shared_chunks_counter = Counter()
         completed_files = set()
