@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from io import IOBase, BytesIO
+from typing import Optional
 
 @dataclass
 class CodeTable:
@@ -69,6 +70,8 @@ class Context:
     cpy_len: int = 0
     cpy_off: int = 0
     dec_winoff: int = 0
+
+    target_buffer: Optional[bytearray] = None
     
 def build_code_table():
     table: list[Instruction] = []
@@ -132,3 +135,5 @@ def build_code_table():
 
 CODE_TABLE = build_code_table()
 
+class ChecksumMissmatch(AssertionError):
+    pass

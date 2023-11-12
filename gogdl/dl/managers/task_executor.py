@@ -681,7 +681,10 @@ class ExecutingManager:
 
                 if not res.success:
                     self.logger.fatal("Task writer failed")
-
+                    if res.task.flags & generic.TaskFlag.PATCH:
+                        # Handle full redownload?
+                        pass
+    
                 self.progress.update_bytes_written(res.written)
                 if res.task.old_file:
                     self.progress.update_bytes_read(res.task.size or 0)

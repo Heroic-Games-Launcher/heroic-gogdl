@@ -239,8 +239,10 @@ class Patch:
     def get(cls,  manifest, old_manifest, lang: str, dlcs: list, api_handler):
         if isinstance(manifest, v1.Manifest) or isinstance(old_manifest, v1.Manifest):
             return None
-        from_build = old_manifest.data['buildId']
-        to_build = manifest.data['buildId']
+        from_build = old_manifest.data.get('buildId')
+        to_build = manifest.data.get('buildId')
+        if not from_build or not to_build:
+            return None
         dlc_ids = [dlc["id"] for dlc in dlcs]
         patch_meta = dl_utils.get_zlib_encoded(api_handler, f'{constants.GOG_CONTENT_SYSTEM}/products/{manifest.product_id}/patches?_version=4&from_build_id={from_build}&to_build_id={to_build}')[0]
         if not patch_meta or patch_meta.get('error'):

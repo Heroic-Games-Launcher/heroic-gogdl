@@ -1,4 +1,5 @@
 from io import BytesIO
+from zlib import adler32
 from gogdl.xdelta import objects
 
 # Convert stfio integer
@@ -126,6 +127,7 @@ def patch(source: str, patch: str, out: str):
         delta_encoding_length = read_integer_stream(patch_handle)
 
         window_length = read_integer_stream(patch_handle)
+        context.target_buffer = bytearray()
 
         delta_indicator = patch_handle.read(1)[0]
         
@@ -133,9 +135,11 @@ def patch(source: str, patch: str, out: str):
         instructions_length = read_integer_stream(patch_handle)
         addresses_length = read_integer_stream(patch_handle)
 
+        parsed_sum = 0
         if adler32_sum:
             checksum = patch_handle.read(4)
-
+            parsed_sum = int.from_bytes(checksum, 'big')
+        
 
         context.data_sec = BytesIO(patch_handle.read(add_run_data_length))
         context.inst_sec = BytesIO(patch_handle.read(instructions_length))
@@ -164,6 +168,13 @@ def patch(source: str, patch: str, out: str):
             while current2.type != objects.XD3_NOOP:
                 decode_halfinst(context, current2)
 
+        if adler32_sum:
+            calculated_sum = adler32(context.target_buffer)
+            if parsed_sum != calculated_sum:
+                raise objects.ChecksumMissmatch
+
+        context.target.write(context.target_buffer)
+
         indicator = patch_handle.read(1)
         if not len(indicator):
             win_indicator = None
@@ -172,6 +183,7 @@ def patch(source: str, patch: str, out: str):
         win_number += 1
 
 
+    dst_handle.flush()
     src_handle.close()
     patch_handle.close()
     dst_handle.close()
