@@ -87,7 +87,7 @@ class ExecutingManager:
         downloaded_v1 = dict()
         cached = set()
         
-        # Re-use cachces
+        # Re-use caches
         if os.path.exists(self.cache):
             for cache_file in os.listdir(self.cache):
                 cached.add(cache_file)
@@ -123,8 +123,8 @@ class ExecutingManager:
                 checksum = f.new_file.md5 or f.new_file.sha256 or first_chunk_checksum
                 self.hash_map.update({f.new_file.path.lower(): checksum})
                 # Just updating chunk size
-                # I doubt patches will have re usable chunks
                 for chunk in f.chunks:
+                    shared_chunks_counter[chunk["compressedMd5"]] += 1
                     if self.biggest_chunk < chunk["size"]:
                         self.biggest_chunk = chunk["size"]
 
@@ -331,27 +331,48 @@ class ExecutingManager:
                     chunk_task = generic.ChunkTask(f'{f.new_file.product_id}_patch', i, chunk['compressedMd5'], chunk['md5'], chunk['size'], chunk['compressedSize'])
                     chunk_task.cleanup = True
                     patch_size += chunk['size']
-                    self.v2_chunks_to_download.append((f'{f.new_file.product_id}_patch', chunk["compressedMd5"]))
-                    self.download_size += chunk['compressedSize']
+                    is_cached = chunk["md5"] in cached
+                    if shared_chunks_counter[chunk["compressedMd5"]] > 1 and not is_cached:
+                        self.v2_chunks_to_download.append((f'{f.new_file.product_id}_patch', chunk["compressedMd5"]))
+                        chunk_task.offload_to_cache = True
+                        cached.add(chunk["md5"])
+                        self.download_size += chunk['compressedSize']
+                        current_tmp_size += chunk['size']
+                        required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
+                    elif is_cached:
+                        chunk_task.old_offset = 0
+                        chunk_task.old_file = os.path.join(self.cache, chunk["md5"])
+                    else:
+                        self.v2_chunks_to_download.append((f'{f.new_file.product_id}_patch', chunk["compressedMd5"]))
+                        self.download_size += chunk['compressedSize']
+                    shared_chunks_counter[chunk['compressedMd5']] -= 1
                     chunk_tasks.append(chunk_task)
+                    if is_cached and shared_chunks_counter[chunk["compressedMd5"]] == 0:
+                        cached.remove(chunk["md5"])
+                        self.tasks.append(generic.FileTask(os.path.join(self.cache, chunk["md5"]), flags=generic.TaskFlag.DELETE_FILE))
+                        current_tmp_size -= chunk['size']
 
                 self.disk_size += patch_size
                 current_tmp_size += patch_size 
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
 
+                # Download patch
                 self.tasks.append(generic.FileTask(f.target + ".delta", flags=generic.TaskFlag.OPEN_FILE))
                 self.tasks.extend(chunk_tasks)
                 self.tasks.append(generic.FileTask(f.target + ".delta", flags=generic.TaskFlag.CLOSE_FILE))
 
                 current_tmp_size += out_file_size
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
-
+                
+                # Apply patch to .tmp file
                 self.tasks.append(generic.FileTask(f.target + ".tmp", flags=generic.TaskFlag.PATCH, patch_file=(f.target + '.delta'), old_file=f.source))
                 current_tmp_size -= patch_size 
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
+                # Remove patch file
                 self.tasks.append(generic.FileTask(f.target + ".delta", flags=generic.TaskFlag.DELETE_FILE))
                 current_tmp_size -= old_file_size
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
+                # Move new file to old one's location
                 self.tasks.append(generic.FileTask(f.target, flags=generic.TaskFlag.RENAME_FILE | generic.TaskFlag.DELETE_FILE, old_file=f.target + ".tmp"))
                 self.disk_size += out_file_size
 
@@ -361,7 +382,7 @@ class ExecutingManager:
         for f in self.diff.links:
             self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_SYMLINK, old_file=f.target))
 
-        self.progress = ProgressBar(self.disk_size, get_readable_size(self.disk_size))
+        self.progress = ProgressBar(self.disk_size)
         self.items_to_complete = len(self.tasks)
 
         print(get_readable_size(self.download_size), self.download_size)
@@ -380,6 +401,7 @@ class ExecutingManager:
             self.shm_segments.append(segment)
         self.logger.debug(f"Created shm segments {len(self.shm_segments)}, chunk size = {self.biggest_chunk / 1024 / 1024:.02f} MiB")
         interrupted = False
+        self.fatal_error = False
         def handle_sig(num, frame):
             nonlocal interrupted
             self.interrupt_shutdown()
@@ -408,7 +430,7 @@ class ExecutingManager:
             if self.disk_size:
                 self.progress.start()
 
-            while self.processed_items < self.items_to_complete and not interrupted:
+            while self.processed_items < self.items_to_complete and not interrupted and not self.fatal_error:
                 time.sleep(1)
             if interrupted:
                 return True
@@ -416,7 +438,7 @@ class ExecutingManager:
             return True
         
         self.shutdown()
-        return
+        return self.fatal_error
 
     def interrupt_shutdown(self):
         self.progress.completed = True
@@ -488,7 +510,8 @@ class ExecutingManager:
             self.shm_cond.notify()
 
         try:
-            os.remove(self.resume_file)
+            if os.path.exists(self.resume_file):
+                os.remove(self.resume_file)
         except:
             self.logger.error("Failed to remove resume file")
 
@@ -681,9 +704,8 @@ class ExecutingManager:
 
                 if not res.success:
                     self.logger.fatal("Task writer failed")
-                    if res.task.flags & generic.TaskFlag.PATCH:
-                        # Handle full redownload?
-                        pass
+                    self.fatal_error = True
+                    return
     
                 self.progress.update_bytes_written(res.written)
                 if res.task.old_file:

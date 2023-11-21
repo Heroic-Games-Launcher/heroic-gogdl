@@ -7,6 +7,22 @@ ZIP_64_END_OF_CD_LOCATOR = b"\x50\x4b\x06\x07"
 ZIP_64_END_OF_CD = b"\x50\x4b\x06\x06"
 
 class LocalFile:
+    def __init__(self) -> None:
+        self.relative_local_file_offset: int
+        self.version_needed: bytes 
+        self.general_purpose_bit_flag: bytes
+        self.compression_method: int
+        self.last_modification_time: bytes
+        self.last_modification_date: bytes
+        self.crc32: bytes
+        self.compressed_size: int
+        self.uncompressed_size: int
+        self.file_name_length: int
+        self.extra_field_length: int
+        self.file_name: str
+        self.extra_field: bytes
+        self.last_byte: int
+
     def load_data(self, handler):
         return handler.get_bytes_from_file(
             from_b=self.last_byte + self.relative_local_file_offset,
@@ -17,7 +33,7 @@ class LocalFile:
     @classmethod
     def from_bytes(cls, data, offset, handler):
         local_file = cls()
-        local_file.relative_local_file_offset = None
+        local_file.relative_local_file_offset = 0
         local_file.version_needed = data[4:6]
         local_file.general_purpose_bit_flag = data[6:8]
         local_file.compression_method = int.from_bytes(data[8:10], "little")
@@ -52,6 +68,28 @@ class LocalFile:
 
 
 class CentralDirectoryFile:
+    def __init__(self):
+        self.version_made_by: bytes
+        self.version_needed_to_extract: bytes
+        self.general_purpose_bit_flag: bytes
+        self.compression_method: bytes
+        self.last_modification_time: bytes
+        self.last_modification_date: bytes
+        self.crc32: int
+        self.compressed_size: int
+        self.uncompressed_size: int
+        self.file_name_length: int
+        self.extra_field_length: int
+        self.file_comment_length: int
+        self.disk_number_start: bytes
+        self.int_file_attrs: bytes
+        self.ext_file_attrs: bytes
+        self.relative_local_file_offset: int
+        self.file_name: str
+        self.extra_field: bytes
+        self.comment: bytes
+        self.last_byte: int
+
     @classmethod
     def from_bytes(cls, data):
         cd_file = cls()
@@ -114,9 +152,9 @@ class CentralDirectory:
 
 class Zip64EndOfCentralDirLocator:
     def __init__(self):
-        self.number_of_disk = None
-        self.zip64_end_of_cd_offset = None
-        self.total_number_of_disks = None
+        self.number_of_disk: int
+        self.zip64_end_of_cd_offset: int
+        self.total_number_of_disks: int
 
     @classmethod
     def from_bytes(cls, data):
@@ -131,15 +169,15 @@ class Zip64EndOfCentralDirLocator:
 
 class Zip64EndOfCentralDir:
     def __init__(self):
-        self.size = None
-        self.version_made_by = None
-        self.version_needed = None
-        self.number_of_disk = None
-        self.central_directory_start_disk = None
-        self.number_of_entries_on_this_disk = None
-        self.number_of_entries_total = None
-        self.size_of_central_directory = None
-        self.central_directory_offset = None
+        self.size: int
+        self.version_made_by: bytes
+        self.version_needed: bytes
+        self.number_of_disk: bytes
+        self.central_directory_start_disk: bytes
+        self.number_of_entries_on_this_disk: int
+        self.number_of_entries_total: int
+        self.size_of_central_directory: int
+        self.central_directory_offset: int
         self.extensible_data = None
 
     @classmethod
@@ -164,13 +202,13 @@ class Zip64EndOfCentralDir:
 
 class EndOfCentralDir:
     def __init__(self):
-        self.number_of_disk = None
-        self.central_directory_disk = None
-        self.central_directory_records = None
-        self.size_of_central_directory = None
-        self.central_directory_offset = None
-        self.comment_length = None
-        self.comment = None
+        self.number_of_disk: bytes
+        self.central_directory_disk: bytes
+        self.central_directory_records: int
+        self.size_of_central_directory: int
+        self.central_directory_offset: int
+        self.comment_length: bytes
+        self.comment: bytes
 
     @classmethod
     def from_bytes(cls, data):
@@ -195,7 +233,7 @@ class InstallerHandler:
     def __init__(self, url, session):
         self.url = url
         self.session = session
-        self.file_size = None 
+        self.file_size = 0
         beginning_of_file = self.get_bytes_from_file(
             from_b=1024*512, size=1024*512, add_archive_index=False
         )
@@ -203,10 +241,10 @@ class InstallerHandler:
         self.start_of_archive_index = beginning_of_file.find(LOCAL_FILE_HEADER) + 1024*512
 
         # ZIP contents
-        self.central_directory_offset = None
-        self.central_directory_records = None
-        self.size_of_central_directory = None
-        self.central_directory = None
+        self.central_directory_offset: int
+        self.central_directory_records: int
+        self.size_of_central_directory: int
+        self.central_directory: CentralDirectory
 
     def get_bytes_from_file(self, from_b=-1, size=None, add_archive_index=True, raw_response=False):
         if add_archive_index:

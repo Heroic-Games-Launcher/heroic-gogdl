@@ -4,13 +4,12 @@ from time import sleep, time
 
 
 class ProgressBar(threading.Thread):
-    def __init__(self, max_val, total_readable_size):
+    def __init__(self, max_val):
         self.logger = logging.getLogger("PROGRESS")
         self.downloaded = 0
         self.total = max_val
         self.started_at = time()
         self.last_update = time()
-        self.total_readable_size = total_readable_size
         self.completed = False
 
         self.decompressed = 0

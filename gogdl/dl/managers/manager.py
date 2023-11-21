@@ -67,6 +67,18 @@ class Manager:
         self.download_manager.download()
 
     def setup_download_manager(self):
+        # TODO: If content system for linux ever appears remove this if statement
+        # But keep the one below so we have some sort of fallback
+        # in case not all games were available in content system
+        if self.platform == "linux":
+            self.logger.info(
+                "Platform is Linux, redirecting download to Linux Native installer manager"
+            )
+
+            self.download_manager = linux.Manager(self)
+
+            return
+
         try:
             self.builds = self.get_builds(self.platform)
         except UnsupportedPlatform:
