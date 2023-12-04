@@ -60,6 +60,10 @@ class ExecutingManager:
         self.download_res_queue = Queue()
         self.writer_queue = Queue()
         self.writer_res_queue = Queue()
+        
+        self.download_speed_updates = Queue()
+        self.writer_speed_updates = Queue()
+
         self.manager = ProcessingManager()
         self.shared_secure_links = self.manager.dict()
         self.shared_secure_links.update(self.secure_links)
@@ -122,7 +126,6 @@ class ExecutingManager:
                 first_chunk_checksum = f.new_file.chunks[0]['md5'] if len(f.new_file.chunks) else None
                 checksum = f.new_file.md5 or f.new_file.sha256 or first_chunk_checksum
                 self.hash_map.update({f.new_file.path.lower(): checksum})
-                # Just updating chunk size
                 for chunk in f.chunks:
                     shared_chunks_counter[chunk["compressedMd5"]] += 1
                     if self.biggest_chunk < chunk["size"]:
@@ -382,7 +385,6 @@ class ExecutingManager:
         for f in self.diff.links:
             self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_SYMLINK, old_file=f.target))
 
-        self.progress = ProgressBar(self.disk_size)
         self.items_to_complete = len(self.tasks)
 
         print(get_readable_size(self.download_size), self.download_size)
@@ -412,14 +414,15 @@ class ExecutingManager:
             self.threads.append(Thread(target=self.download_manager, args=(self.task_cond, self.shm_cond)))
             self.threads.append(Thread(target=self.process_task_results, args=(self.task_cond,)))
             self.threads.append(Thread(target=self.process_writer_task_results, args=(self.shm_cond,)))
+            self.progress = ProgressBar(self.disk_size, self.download_speed_updates, self.writer_speed_updates)
 
             # Spawn workers 
             for _ in range(self.allowed_threads):
-                worker = task_executor.Download(self.shared_memory.name, self.download_queue, self.download_res_queue, self.shared_secure_links)
+                worker = task_executor.Download(self.shared_memory.name, self.download_queue, self.download_res_queue, self.download_speed_updates, self.shared_secure_links)
                 worker.start()
                 self.download_workers.append(worker)
         
-            self.writer_worker = task_executor.Writer(self.shared_memory.name, self.writer_queue, self.writer_res_queue, self.cache)
+            self.writer_worker = task_executor.Writer(self.shared_memory.name, self.writer_queue, self.writer_res_queue, self.writer_speed_updates, self.cache)
             self.writer_worker.start()
 
             [th.start() for th in self.threads]
@@ -708,8 +711,6 @@ class ExecutingManager:
                     return
     
                 self.progress.update_bytes_written(res.written)
-                if res.task.old_file:
-                    self.progress.update_bytes_read(res.task.size or 0)
                 if res.task.flags & generic.TaskFlag.RELEASE_MEM and res.task.shared_memory:
                     self.logger.debug(f"Releasing memory {res.task.shared_memory}")
                     self.shm_segments.appendleft(res.task.shared_memory)

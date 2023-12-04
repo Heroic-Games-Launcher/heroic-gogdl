@@ -1,4 +1,6 @@
 from io import BytesIO
+import math
+from multiprocessing import Queue
 from zlib import adler32
 from gogdl.xdelta import objects
 
@@ -43,35 +45,39 @@ def parse_halfinst(context: objects.Context, halfinst: objects.HalfInstruction):
     context.dec_pos += halfinst.size
 
 
-def decode_halfinst(context:objects.Context, halfinst: objects.HalfInstruction):
+def decode_halfinst(context:objects.Context, halfinst: objects.HalfInstruction, speed_queue: Queue):
     take = halfinst.size
 
     if halfinst.type == objects.XD3_RUN:
         byte = context.data_sec.read(1)
 
         for _ in range(take):
-            context.target.write(byte)
+            context.target_buffer.extend(byte)
 
         halfinst.type = objects.XD3_NOOP
     elif halfinst.type == objects.XD3_ADD:
         buffer = context.data_sec.read(take)
         assert len(buffer) == take
-        context.target.write(buffer)
+        context.target_buffer.extend(buffer)
         halfinst.type = objects.XD3_NOOP
     else: # XD3_CPY and higher
         if halfinst.addr < (context.cpy_len or 0):
             context.source.seek(context.cpy_off + halfinst.addr)
-            buffer = context.source.read(take)
-            assert len(buffer) == take
-            context.target.write(buffer)
+            left = take
+            while left > 0:
+                buffer = context.source.read(min(1024 * 1024, left))
+                size = len(buffer)
+                speed_queue.put((0, size))
+                context.target_buffer.extend(buffer)
+                left -= size
+
         else:
             print("OVERLAP NOT IMPLEMENTED")
             raise Exception("OVERLAP")
         halfinst.type = objects.XD3_NOOP
 
 
-
-def patch(source: str, patch: str, out: str):
+def patch(source: str, patch: str, out: str, speed_queue: Queue):
     src_handle = open(source, 'rb') 
     patch_handle = open(patch, 'rb')
     dst_handle = open(out, 'wb')
@@ -163,17 +169,24 @@ def patch(source: str, patch: str, out: str):
                     parse_halfinst(context, current2)
             
             while current1.type != objects.XD3_NOOP:
-                decode_halfinst(context, current1)
+                decode_halfinst(context, current1, speed_queue)
                 
             while current2.type != objects.XD3_NOOP:
-                decode_halfinst(context, current2)
+                decode_halfinst(context, current2, speed_queue)
 
         if adler32_sum:
             calculated_sum = adler32(context.target_buffer)
             if parsed_sum != calculated_sum:
                 raise objects.ChecksumMissmatch
 
-        context.target.write(context.target_buffer)
+        total_size = len(context.target_buffer)
+        chunk_size = 1024 * 1024
+        for i in range(math.ceil(total_size / chunk_size)):
+            chunk = context.target_buffer[i * chunk_size : min((i + 1) * chunk_size, total_size)]
+            context.target.write(chunk)
+            speed_queue.put((len(chunk), 0))
+            
+        context.target.flush()
 
         indicator = patch_handle.read(1)
         if not len(indicator):

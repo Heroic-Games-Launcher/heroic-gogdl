@@ -1,13 +1,17 @@
+import queue
+from multiprocessing import Queue
 import threading
 import logging
 from time import sleep, time
 
 
 class ProgressBar(threading.Thread):
-    def __init__(self, max_val):
+    def __init__(self, max_val: int, speed_queue: Queue, write_queue: Queue):
         self.logger = logging.getLogger("PROGRESS")
         self.downloaded = 0
         self.total = max_val
+        self.speed_queue = speed_queue
+        self.write_queue = write_queue
         self.started_at = time()
         self.last_update = time()
         self.completed = False
@@ -15,10 +19,10 @@ class ProgressBar(threading.Thread):
         self.decompressed = 0
 
         self.downloaded_since_last_update = 0
+        self.decompressed_since_last_update = 0
         self.written_since_last_update = 0
         self.read_since_last_update = 0
 
-        self.read_total = 0
         self.written_total = 0
 
         super().__init__(target=self.loop)
@@ -26,7 +30,23 @@ class ProgressBar(threading.Thread):
     def loop(self):
         while not self.completed:
             self.print_progressbar()
-            sleep(1)
+            self.downloaded_since_last_update = self.decompressed_since_last_update = 0
+            self.written_since_last_update = self.read_since_last_update = 0
+            timestamp = time()
+            while (time() - timestamp) < 1:
+                try:
+                    dl, dec = self.speed_queue.get_nowait()
+                    self.downloaded_since_last_update += dl
+                    self.decompressed_since_last_update += dec
+                except queue.Empty:
+                    pass
+                try:
+                    wr, r = self.write_queue.get_nowait()
+                    self.written_since_last_update += wr
+                    self.read_since_last_update += r
+                except queue.Empty:
+                    pass
+                
         self.print_progressbar()
     def print_progressbar(self):
         percentage = (self.written_total / self.total) * 100
@@ -37,9 +57,11 @@ class ProgressBar(threading.Thread):
 
         print_time_delta = time() - self.last_update
         
-        average_speed = self.downloaded / running_time
-        average_decompress = self.decompressed / running_time
+        current_dl_speed = 0
+        current_decompress = 0
         if print_time_delta:
+            current_dl_speed = self.downloaded_since_last_update / print_time_delta
+            current_decompress = self.decompressed_since_last_update / print_time_delta
             current_w_speed = self.written_since_last_update / print_time_delta
             current_r_speed = self.read_since_last_update / print_time_delta
         else:
@@ -69,8 +91,8 @@ class ProgressBar(threading.Thread):
         )
 
         self.logger.info(
-            f" + Download\t- {average_speed / 1024 / 1024:.02f} MiB/s (raw) "
-            f"/ {average_decompress / 1024 / 1024:.02f} MiB/s (decompressed)"
+            f" + Download\t- {current_dl_speed / 1024 / 1024:.02f} MiB/s (raw) "
+            f"/ {current_decompress / 1024 / 1024:.02f} MiB/s (decompressed)"
         )
 
         self.logger.info(
@@ -78,23 +100,13 @@ class ProgressBar(threading.Thread):
             f"{current_r_speed / 1024 / 1024:.02f} MiB/s (read)"
         )
 
-        self.downloaded_since_last_update = 0
-        self.written_since_last_update = 0
-        self.read_since_last_update = 0
-
         self.last_update = time()
 
     def update_downloaded_size(self, addition):
         self.downloaded += addition
-        self.downloaded_since_last_update += addition
 
     def update_decompressed_size(self, addition):
         self.decompressed += addition
 
     def update_bytes_written(self, addition):
         self.written_total += addition
-        self.written_since_last_update += addition
-
-    def update_bytes_read(self, addition):
-        self.read_total += addition
-        self.read_since_last_update += addition

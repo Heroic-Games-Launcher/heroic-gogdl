@@ -9,6 +9,7 @@ import time
 import requests
 import zlib
 import hashlib
+from io import BytesIO
 from typing import Optional, Union
 from copy import copy
 from gogdl.dl import dl_utils
@@ -81,10 +82,11 @@ class WriterTaskResult:
 
 
 class Download(Process):
-    def __init__(self, shared_memory, download_queue, results_queue, shared_secure_links):
+    def __init__(self, shared_memory, download_queue, results_queue, speed_queue, shared_secure_links):
         self.shared_memory = SharedMemory(name=shared_memory)
         self.download_queue: Queue = download_queue
         self.results_queue: Queue = results_queue
+        self.speed_queue: Queue = speed_queue
         self.secure_links: dict = shared_secure_links
         self.session = requests.session()
         self.early_exit = False
@@ -124,16 +126,30 @@ class Download(Process):
             endpoint["url"] += "/" + dl_utils.galaxy_path(compressed_md5)
             url = endpoint["url"]
 
+        buffer = bytes()
+        compressed_sum = hashlib.md5()
+        download_size = 0
         response = None
         while retries > 0:
+            buffer = bytes()
+            compressed_sum = hashlib.md5()
+            download_size = 0
+            decompressor = zlib.decompressobj()
             try:
-                response = self.session.get(url, timeout=10)
+                response = self.session.get(url, stream=True, timeout=10)
                 response.raise_for_status()
+                for chunk in response.iter_content(1024 * 512):
+                    download_size += len(chunk)
+                    compressed_sum.update(chunk)
+                    decompressed = decompressor.decompress(chunk)
+                    buffer += decompressed
+                    self.speed_queue.put((len(chunk), len(decompressed)))
+
             except Exception as e:
                 print("Connection failed", e)
-                # Handle exception
                 if response and response.status_code == 401:
                     self.results_queue.put(DownloadTaskResult(False, FailReason.UNAUTHORIZED, task))
+                    print("Connection failed, unauthorized")
                     return
                 retries -= 1
                 time.sleep(2)
@@ -143,17 +159,10 @@ class Download(Process):
             self.results_queue.put(DownloadTaskResult(False, FailReason.CHECKSUM, task))
             return
 
-        compressed_sum = hashlib.md5()
-        download_size = 0
         decompressed_size = 0
         try:
-            chunk = response.content
-            download_size = len(chunk)
-            compressed_sum.update(chunk)
-            data = zlib.decompress(chunk)
-            decompressed_size = len(data)
-            del chunk
-            self.shared_memory.buf[task.memory_segment.offset:decompressed_size+task.memory_segment.offset] = data
+            decompressed_size = len(buffer)
+            self.shared_memory.buf[task.memory_segment.offset:decompressed_size+task.memory_segment.offset] = buffer
 
         except Exception as e:
             print("ERROR", e)
@@ -178,10 +187,15 @@ class Download(Process):
         )
         range_header = dl_utils.get_range_header(task.offset, task.size)
 
+        buffer = bytes()
         while retries > 0:
+            buffer = bytes()
             try:
-                response = self.session.get(url, timeout=10, headers={'Range': range_header})
+                response = self.session.get(url, stream=True, timeout=10, headers={'Range': range_header})
                 response.raise_for_status()
+                for chunk in response.iter_content(1024 * 512):
+                    buffer += chunk 
+                    self.speed_queue.put((len(chunk), len(chunk)))
             except Exception as e:
                 print("Connection failed", e)
                 #Handle exception
@@ -198,9 +212,8 @@ class Download(Process):
          
         download_size = 0
         try:
-            chunk = response.content
-            download_size = len(chunk)
-            self.shared_memory.buf[task.memory_segment.offset:download_size + task.memory_segment.offset] = chunk
+            download_size = len(buffer)
+            self.shared_memory.buf[task.memory_segment.offset:download_size + task.memory_segment.offset] = buffer
 
         except Exception as e:
             print("ERROR", e)
@@ -210,11 +223,12 @@ class Download(Process):
         self.results_queue.put(DownloadTaskResult(True, None, task, download_size=download_size, decompressed_size=download_size))
 
 class Writer(Process):
-    def __init__(self, shared_memory, writer_queue, results_queue, cache):
+    def __init__(self, shared_memory, writer_queue, results_queue, speed_queue, cache):
         self.shared_memory = SharedMemory(name=shared_memory)
         self.cache = cache
         self.writer_queue: Queue = writer_queue
         self.results_queue: Queue = results_queue
+        self.speed_queue: Queue = speed_queue
         self.early_exit = False
         super().__init__()
 
@@ -337,7 +351,7 @@ class Writer(Process):
                     patch = dl_utils.get_case_insensitive_name(patch)
                     target = task_path
 
-                    patcher.patch(source, patch, target)
+                    patcher.patch(source, patch, target, self.speed_queue)
 
                 except Exception as e:
                     print("Patch failed", e)
@@ -386,12 +400,20 @@ class Writer(Process):
                         continue
                     offset = task.shared_memory.offset
                     end = offset + task.size
-                    written += file_handle.write(self.shared_memory.buf[offset:end].tobytes())
+                    left = task.size
+                    buffer = BytesIO(self.shared_memory.buf[offset:end].tobytes())
+                    while left > 0:
+                        chunk = buffer.read(min(1024 * 1024, left))   
+                        written += file_handle.write(chunk)
+                        self.speed_queue.put((len(chunk), 0))
+                        left -= len(chunk)
+                        
                     if task.flags & TaskFlag.OFFLOAD_TO_CACHE and task.hash:
                         cache_file_path = os.path.join(self.cache, task.hash)
                         dl_utils.prepare_location(self.cache)
                         cache_file = open(cache_file_path, 'wb')
                         cache_file.write(self.shared_memory.buf[offset:end].tobytes())
+                        self.speed_queue.put((task.size, 0))
                         cache_file.close()
                 elif task.old_file:
                     if not task.size:
@@ -403,7 +425,12 @@ class Writer(Process):
                     old_file_handle = open(old_file_path, "rb")
                     if task.old_offset:
                         old_file_handle.seek(task.old_offset)
-                    written += file_handle.write(old_file_handle.read(task.size))
+                    left = task.size
+                    while left > 0:
+                        chunk = old_file_handle.read(min(1024*1024, left))
+                        written += file_handle.write(chunk)
+                        self.speed_queue.put((len(chunk), len(chunk)))
+                        left -= len(chunk)
                     old_file_handle.close()
 
 
