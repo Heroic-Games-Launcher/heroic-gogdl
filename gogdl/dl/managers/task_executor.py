@@ -464,7 +464,7 @@ class ExecutingManager:
                 child.terminate()
             
         # Clean queues
-        for queue in [self.writer_res_queue, self.writer_queue, self.download_queue, self.download_res_queue]:
+        for queue in [self.writer_res_queue, self.writer_queue, self.download_queue, self.download_res_queue, self.download_speed_updates, self.writer_speed_updates]:
             try:
                 while True:
                     _ = queue.get_nowait()
