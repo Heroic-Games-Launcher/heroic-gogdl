@@ -30,6 +30,7 @@ class TaskFlag(Flag):
     MAKE_EXE = auto()
     PATCH = auto()
     RELEASE_MEM = auto()
+    ZIP_DEC = auto()
 
 @dataclass
 class MemorySegment:

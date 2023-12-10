@@ -1,13 +1,17 @@
 # Manage downloading of linux native games using new zip method based on Range headers
+import json
 import logging
-import sys
+import hashlib
 import os.path
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+import stat
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from zlib import crc32
 from gogdl.dl import dl_utils
+from gogdl.dl.managers.task_executor import ExecutingManager
+from gogdl.dl.objects.generic import BaseDiff
 from gogdl.dl.workers import linux as linux_worker
 from gogdl.dl.objects import linux
 from gogdl import constants
-import signal
 
 
 def get_folder_name_from_windows_manifest(api_handler, id):
@@ -31,6 +35,7 @@ class Manager:
         self.game_id = generic_manager.game_id
         self.arguments = generic_manager.arguments
         self.unknown_arguments = generic_manager.unknown_arguments
+        self.is_verifying = generic_manager.is_verifying
 
         self.api_handler = generic_manager.api_handler
         self.allowed_threads = generic_manager.allowed_threads
@@ -92,7 +97,7 @@ class Manager:
 
         if not self.dlc_only:
             installer_data = dl_utils.get_json(self.api_handler, self.game_installer["files"][0]["downlink"])
-            game_install_handler = linux.InstallerHandler(installer_data["downlink"],self.api_handler.session)
+            game_install_handler = linux.InstallerHandler(installer_data["downlink"],self.game_id,self.api_handler.session)
             self.installer_handlers.append(game_install_handler)
 
         # Create dlc installer handlers
@@ -107,7 +112,8 @@ class Manager:
                     installer_data = dl_utils.get_json(self.api_handler, installer["files"][0]["downlink"])
 
                     install_handler = linux.InstallerHandler(installer_data["downlink"],
-                                                              self.api_handler.session)
+                                                             str(dlc["id"]),
+                                                             self.api_handler.session)
 
                     self.installer_handlers.append(install_handler)
 
@@ -164,28 +170,121 @@ class Manager:
 
     def download(self):
         self.setup()
+        manifest_path = os.path.join(self.path, '.gogdl-linux-manifest')
 
-        download_size, disk_size = self.calculate_download_sizes()
-
-        if not dl_utils.check_free_space(disk_size, self.path):
-            raise Exception("Not enough space")
-
-        processes = list()
-        p = ProcessPoolExecutor(self.allowed_threads)
+        cd_files = dict()
         for handler in self.installer_handlers:
             for file in handler.central_directory.files:
                 if not file.file_name.startswith("data/noarch") or file.file_name.endswith("/"):
                     continue
-                worker = linux_worker.DLWorker(file, self.path)
-                processes.append(p.submit(worker.work, handler))
+                cd_files.update({file.file_name: file})
 
-        def shut(sig, code):
-            p.shutdown(wait=True, cancel_futures=True)
-            sys.exit(-sig)
+        manifest_data = None
+        if os.path.exists(manifest_path):
+            with open(manifest_path, 'r') as f:
+                manifest_data = json.load(f)
 
-        signal.signal(signal.SIGINT, shut)
-        signal.signal(signal.SIGTERM, shut)
+        new: list[linux.CentralDirectoryFile] = list()
+        deleted: list[str] = list()
+        if manifest_data and not self.is_verifying:
+            manifest_files = dict()
+            for file in manifest_data['files']:
+                manifest_files.update({file['file_name']: file['crc32']})
 
-        for process in as_completed(processes):
-            if process.cancelled():
-                break
+            for file_name in manifest_files:
+                if file_name in cd_files:
+                    if cd_files[file_name].crc32 != manifest_files[file_name]:
+                        new.append(cd_files[file_name])
+                else:
+                    deleted.append(file_name)
+            
+            for file_name in cd_files:
+                if file_name not in manifest_files:
+                    new.append(cd_files[file_name])
+
+        else:
+            new = list(cd_files.values())
+
+        sources = dict()
+        for handler in self.installer_handlers:
+            sources.update({handler.product: handler.url})
+
+        print("New/changed files", len(new))
+        print("Deleted", len(deleted))
+        print("Total files", len(cd_files))
+
+        if self.is_verifying:
+            self.logger.info("Verifying files")
+            invalid = list()
+            for file in new:
+                path = file.file_name.replace("data/noarch", self.path)
+                if not os.path.exists(path):
+                    invalid.append(file)
+                else:
+                    with open(path, 'rb') as fh:
+                        sum = 0
+                        while data := fh.read(1024*1024):
+                            sum = crc32(data, sum)
+
+                        if sum != file.crc32:
+                            invalid.append(file)
+            if not len(invalid):
+                self.logger.info("All files look good")
+                return
+            new = invalid
+
+
+        diff = BaseDiff()
+
+        final_files = list()
+        for file in new:
+            # Prepare file for download
+            # Calculate data offsets 
+            handler = None
+            for ins in self.installer_handlers:
+                if ins.product == file.product:
+                    handler = ins
+                    break
+
+            if not handler:
+                print("Orphan file found")
+                continue
+            
+            data_start = handler.start_of_archive_index + file.relative_local_file_offset + 34 + file.file_name_length + file.extra_field_length
+            c_size = file.compressed_size
+            size = file.uncompressed_size
+            method = file.compression_method
+            checksum = file.crc32
+            file_permissions = int(bin(int.from_bytes(file.ext_file_attrs, "little"))[9:][:9])
+            executable = (file_permissions & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)) != 0
+            final_files.append(linux.LinuxFile(file.product, file.file_name.replace("data/noarch", self.path), method, data_start, c_size, size, checksum, executable))
+
+        diff.new = final_files
+
+        manager = ExecutingManager(self.api_handler, self.allowed_threads, self.path, None, diff, sources)  
+        
+        manager.setup()
+        for file in deleted:
+            path = file.replace('data/noarch', self.path)
+            if os.path.exists(path):
+                os.remove(path)
+        cancelled = manager.run()
+
+        if cancelled:
+            return
+
+        new_manifest = dict()
+
+        gameinfo_file = os.path.join(self.path, 'gameinfo')
+        if os.path.exists(gameinfo_file):
+            checksum = hashlib.md5()
+            with open(gameinfo_file, 'rb') as f:
+                checksum.update(f.read())
+            new_manifest['info_checksum'] = checksum.hexdigest()
+
+        new_manifest['files'] = [f.as_dict() for f in cd_files.values()]
+
+        
+        os.makedirs(self.path, exist_ok=True)
+        with open(manifest_path, 'w') as f:
+            manifest_data = json.dump(new_manifest,f)

@@ -47,7 +47,7 @@ class LocalFile:
 
         extra_data = handler.get_bytes_from_file(
             from_b=30 + offset,
-            size=local_file.file_name_length + local_file.file_name_length,
+            size=local_file.file_name_length + local_file.extra_field_length,
         )
 
         local_file.file_name = bytes(
@@ -68,11 +68,12 @@ class LocalFile:
 
 
 class CentralDirectoryFile:
-    def __init__(self):
+    def __init__(self, product):
+        self.product = product
         self.version_made_by: bytes
         self.version_needed_to_extract: bytes
         self.general_purpose_bit_flag: bytes
-        self.compression_method: bytes
+        self.compression_method: int 
         self.last_modification_time: bytes
         self.last_modification_date: bytes
         self.crc32: int
@@ -91,13 +92,13 @@ class CentralDirectoryFile:
         self.last_byte: int
 
     @classmethod
-    def from_bytes(cls, data):
-        cd_file = cls()
+    def from_bytes(cls, data, product):
+        cd_file = cls(product)
 
         cd_file.version_made_by = data[4:6]
         cd_file.version_needed_to_extract = data[6:8]
         cd_file.general_purpose_bit_flag = data[8:10]
-        cd_file.compression_method = data[10:12]
+        cd_file.compression_method = int.from_bytes(data[10:12], "little")
         cd_file.last_modification_time = data[12:14]
         cd_file.last_modification_date = data[14:16]
         cd_file.crc32 = int.from_bytes(data[16:20], "little")
@@ -125,27 +126,31 @@ class CentralDirectoryFile:
         cd_file.last_byte = comment_start + cd_file.file_comment_length
 
         return cd_file, comment_start + cd_file.file_comment_length
+    
+    def as_dict(self):
+        return {'file_name': self.file_name, 'crc32': self.crc32, 'compressed_size': self.compressed_size, 'size': self.uncompressed_size}
 
     def __str__(self):
-        return f"\nCompressionMethod: {self.compression_method} \nFileNameLen: {self.file_name_length} \nFileName: {bytes(self.file_name).decode('iso-8859-15')} \nStartDisk: {self.disk_number_start} \nCompressedSize: {self.compressed_size} \nUncompressedSize: {self.uncompressed_size}"
+        return f"\nCompressionMethod: {self.compression_method} \nFileNameLen: {self.file_name_length} \nFileName: {self.file_name} \nStartDisk: {self.disk_number_start} \nCompressedSize: {self.compressed_size} \nUncompressedSize: {self.uncompressed_size}"
 
     def __repr__(self):
         return self.file_name
 
 
 class CentralDirectory:
-    def __init__(self):
+    def __init__(self, product):
         self.files = []
+        self.product = product
 
     @staticmethod
-    def create_central_dir_file(data):
-        return CentralDirectoryFile.from_bytes(data)
+    def create_central_dir_file(data, product):
+        return CentralDirectoryFile.from_bytes(data, product)
 
     @classmethod
-    def from_bytes(cls, data, n):
-        central_dir = cls()
+    def from_bytes(cls, data, n, product):
+        central_dir = cls(product)
         for record in range(n):
-            cd_file, next_offset = central_dir.create_central_dir_file(data)
+            cd_file, next_offset = central_dir.create_central_dir_file(data, product)
             central_dir.files.append(cd_file)
             data = data[next_offset:]
         return central_dir
@@ -230,8 +235,9 @@ class EndOfCentralDir:
 
 
 class InstallerHandler:
-    def __init__(self, url, session):
+    def __init__(self, url, product_id, session):
         self.url = url
+        self.product = product_id
         self.session = session
         self.file_size = 0
         beginning_of_file = self.get_bytes_from_file(
@@ -309,5 +315,20 @@ class InstallerHandler:
         )
 
         self.central_directory = CentralDirectory.from_bytes(
-            central_directory_data, self.central_directory_records
+            central_directory_data, self.central_directory_records, self.product
         )
+
+
+class LinuxFile:
+    def __init__(self, product, path, compression, start, compressed_size, size, checksum, executable):
+        self.product = product
+        self.path = path
+        self.compression = compression == 8
+        self.offset = start
+        self.compressed_size = compressed_size
+        self.size = size
+        self.hash = str(checksum)
+        self.flags = []
+        if executable:
+            self.flags.append("executable")
+

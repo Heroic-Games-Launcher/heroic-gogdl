@@ -179,12 +179,15 @@ class Download(Process):
         retries = 5
         urls = self.secure_links[task.product_id]
 
-        endpoint = copy(urls[0])
         response = None
-        endpoint["parameters"]["path"] += "/main.bin"
-        url = dl_utils.merge_url_with_params(
-            endpoint["url_format"], endpoint["parameters"]
-        )
+        if type(urls) == str:
+            url = urls
+        else:
+            endpoint = copy(urls[0])
+            endpoint["parameters"]["path"] += "/main.bin"
+            url = dl_utils.merge_url_with_params(
+                endpoint["url_format"], endpoint["parameters"]
+            )
         range_header = dl_utils.get_range_header(task.offset, task.size)
 
         buffer = bytes()
@@ -218,6 +221,10 @@ class Download(Process):
         except Exception as e:
             print("ERROR", e)
             self.results_queue.put(DownloadTaskResult(False, FailReason.UNKNOWN, task))
+            return 
+
+        if len(buffer) != task.size:
+            self.results_queue.put(DownloadTaskResult(False, FailReason.CHECKSUM, task))
             return 
 
         self.results_queue.put(DownloadTaskResult(True, None, task, download_size=download_size, decompressed_size=download_size))
@@ -316,7 +323,7 @@ class Writer(Process):
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
                 
-                if task.flags & TaskFlag.DELETE_FILE:
+                if task.flags & TaskFlag.DELETE_FILE and os.path.exists(task_path):
                     try:
                         os.remove(task_path)
                     except OSError as e:
@@ -391,7 +398,6 @@ class Writer(Process):
                 self.results_queue.put(WriterTaskResult(True, task))
                 continue
 
-            
             try:
                 if task.shared_memory:
                     if not task.size:
@@ -426,14 +432,22 @@ class Writer(Process):
                     if task.old_offset:
                         old_file_handle.seek(task.old_offset)
                     left = task.size
+                    if task.flags & TaskFlag.ZIP_DEC:
+                        decompressor = zlib.decompressobj(-15)
+                    else:
+                        decompressor = None
                     while left > 0:
                         chunk = old_file_handle.read(min(1024*1024, left))
-                        written += file_handle.write(chunk)
-                        self.speed_queue.put((len(chunk), len(chunk)))
+                        if decompressor:
+                            data = decompressor.decompress(chunk)
+                        else:
+                            data = chunk
+                        written += file_handle.write(data)
+                        self.speed_queue.put((len(data), len(chunk)))
                         left -= len(chunk)
                     old_file_handle.close()
-
-
+                    if task.flags & TaskFlag.ZIP_DEC:
+                        written = written - task.size
 
             except Exception as e:
                 print("Writer exception", e)

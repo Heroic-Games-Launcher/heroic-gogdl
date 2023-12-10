@@ -33,7 +33,7 @@ class ProgressBar(threading.Thread):
             self.downloaded_since_last_update = self.decompressed_since_last_update = 0
             self.written_since_last_update = self.read_since_last_update = 0
             timestamp = time()
-            while (time() - timestamp) < 1:
+            while not self.completed and (time() - timestamp) < 1:
                 try:
                     dl, dec = self.speed_queue.get_nowait()
                     self.downloaded_since_last_update += dl

@@ -15,7 +15,7 @@ from gogdl.dl import dl_utils
 from gogdl.dl.dl_utils import get_readable_size
 from gogdl.dl.progressbar import ProgressBar
 from gogdl.dl.workers import task_executor
-from gogdl.dl.objects import generic, v2, v1
+from gogdl.dl.objects import generic, v2, v1, linux
 
 class ExecutingManager:
     def __init__(self, api_handler, allowed_threads, path, support, diff, secure_links) -> None:
@@ -37,6 +37,7 @@ class ExecutingManager:
         self.hash_map = dict()
         self.v2_chunks_to_download = deque()
         self.v1_chunks_to_download = deque()
+        self.linux_chunks_to_download = deque()
         self.tasks = deque()
         self.active_tasks = 0
 
@@ -89,6 +90,7 @@ class ExecutingManager:
         mismatched_files = set()
 
         downloaded_v1 = dict()
+        downloaded_linux = dict()
         cached = set()
         
         # Re-use caches
@@ -101,6 +103,9 @@ class ExecutingManager:
         # Also create hashmap for those files
         for f in self.diff.new + self.diff.changed + self.diff.redist:
             if isinstance(f, v1.File):
+                self.hash_map.update({f.path.lower(): f.hash})
+
+            elif isinstance(f, linux.LinuxFile):
                 self.hash_map.update({f.path.lower(): f.hash})
 
             elif isinstance(f, v2.DepotFile):
@@ -135,8 +140,8 @@ class ExecutingManager:
         if not self.biggest_chunk:
             self.biggest_chunk = 20 * 1024 * 1024
         else:
-            # Have at least 8 MiB chunk size for V1 downloads
-            self.biggest_chunk = max(self.biggest_chunk, 8 * 1024 * 1024)
+            # Have at least 10 MiB chunk size for V1 downloads
+            self.biggest_chunk = max(self.biggest_chunk, 10 * 1024 * 1024)
 
         if os.path.exists(self.resume_file):
             self.logger.info("Attempting to continue the download")
@@ -217,6 +222,55 @@ class ExecutingManager:
                 if 'executable' in f.flags:
                     self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
                 downloaded_v1[f.hash] = f
+
+            elif isinstance(f, linux.LinuxFile):
+                if f.size == 0:
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CREATE_FILE))
+                    continue
+                
+                if f.path.lower() in completed_files:
+                    downloaded_linux[f.hash] = f
+                    continue
+                
+                required_disk_size_delta += f.size
+                if f.hash in downloaded_linux:
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.COPY_FILE, old_flags=generic.TaskFlag.NONE, old_file=downloaded_linux[f.hash].path))
+                    if 'executable' in f.flags:
+                        self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE))
+                    continue
+                
+                self.tasks.append(generic.FileTask(f.path+'.tmp', flags=generic.TaskFlag.OPEN_FILE))
+                self.download_size += f.compressed_size
+                self.disk_size += f.size
+                size_left = f.compressed_size
+                chunk_offset = 0
+                i = 0
+                # Split V1 file by chunks, so we can store it in shared memory
+                # This makes checksum useless during the download, but well...
+                while size_left:
+                    chunk_size = min(self.biggest_chunk, size_left)
+                    offset = f.offset + chunk_offset
+                    
+                    task = generic.V1Task(f.product, i, offset, chunk_size, f.hash)
+                    self.tasks.append(task)
+                    self.linux_chunks_to_download.append((f.product, task.compressed_md5, offset, chunk_size))
+
+                    chunk_offset += chunk_size
+                    size_left -= chunk_size
+                    i += 1
+
+                self.tasks.append(generic.FileTask(f.path + '.tmp', flags=generic.TaskFlag.CLOSE_FILE))
+                if f.compression:
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.OPEN_FILE))
+                    self.tasks.append(generic.ChunkTask(f.product, 0, f.hash+"_dec", f.hash+"_dec", f.compressed_size, f.compressed_size, True, False, 0, old_flags=generic.TaskFlag.ZIP_DEC, old_file=f.path+'.tmp'))
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.CLOSE_FILE))
+                    self.tasks.append(generic.FileTask(f.path + '.tmp', flags=generic.TaskFlag.DELETE_FILE))
+                else:
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.DELETE_FILE | generic.TaskFlag.RENAME_FILE, old_file=f.path+'.tmp'))
+
+                if 'executable' in f.flags:
+                    self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.MAKE_EXE))
+                downloaded_linux[f.hash] = f
 
             elif isinstance(f, v2.DepotFile):
                 support_flag = generic.TaskFlag.SUPPORT if 'support' in f.flags else generic.TaskFlag.NONE
@@ -498,6 +552,8 @@ class ExecutingManager:
         self.writer_res_queue.close()
         self.download_queue.close()
         self.download_res_queue.close()
+        self.download_speed_updates.close()
+        self.writer_speed_updates.close()
 
         self.logger.debug("Unlinking shared memory")
         if self.shared_memory:
@@ -522,7 +578,7 @@ class ExecutingManager:
         self.logger.debug("Starting download scheduler")
         no_shm = False
         while self.running:
-            while self.active_tasks <= self.allowed_threads * 2 and (self.v2_chunks_to_download or self.v1_chunks_to_download):
+            while self.active_tasks <= self.allowed_threads * 2 and (self.v2_chunks_to_download or self.v1_chunks_to_download or self.linux_chunks_to_download):
 
                 try:
                     memory_segment = self.shm_segments.popleft()
@@ -544,6 +600,19 @@ class ExecutingManager:
                         self.v1_chunks_to_download.appendleft((product_id, chunk_id, offset, chunk_size))
                         self.shm_segments.appendleft(memory_segment)
                         break
+                elif self.linux_chunks_to_download:
+                    product_id, chunk_id, offset, chunk_size = self.linux_chunks_to_download.popleft()
+                    try:
+                        self.download_queue.put(task_executor.DownloadTask1(product_id, offset, chunk_size, chunk_id, memory_segment))
+                        self.logger.debug(f"Pushed linux download to queue {chunk_id} {product_id} {offset} {chunk_size}")
+                        self.active_tasks += 1
+                        continue
+                    except Exception as e:
+                        self.logger.warning(f"Failed to push v1 task to download {e}")
+                        self.v1_chunks_to_download.appendleft((product_id, chunk_id, offset, chunk_size))
+                        self.shm_segments.appendleft(memory_segment)
+                        break
+
                 elif self.v2_chunks_to_download:
                     product_id, chunk_hash = self.v2_chunks_to_download.popleft()
                     try:
@@ -621,6 +690,8 @@ class ExecutingManager:
                         flags |= generic.TaskFlag.RELEASE_MEM
                     if task.offload_to_cache:
                         flags |= generic.TaskFlag.OFFLOAD_TO_CACHE
+                    if task.old_flags & generic.TaskFlag.ZIP_DEC:
+                        flags |= generic.TaskFlag.ZIP_DEC
                     if task.old_flags & generic.TaskFlag.SUPPORT:
                         old_destination = self.support
                     self.writer_queue.put(task_executor.WriterTask(current_dest, current_file, flags=flags, shared_memory=shm, old_destination=old_destination, old_file=task.old_file, old_offset=task.old_offset, size=task.size, hash=task.md5), timeout=1)
