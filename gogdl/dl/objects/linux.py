@@ -127,8 +127,11 @@ class CentralDirectoryFile:
 
         return cd_file, comment_start + cd_file.file_comment_length
     
+    def is_symlink(self):
+        return (int.from_bytes(self.ext_file_attrs, "little") & 1 << 29) != 0
+
     def as_dict(self):
-        return {'file_name': self.file_name, 'crc32': self.crc32, 'compressed_size': self.compressed_size, 'size': self.uncompressed_size}
+        return {'file_name': self.file_name, 'crc32': self.crc32, 'compressed_size': self.compressed_size, 'size': self.uncompressed_size, 'is_symlink': self.is_symlink()}
 
     def __str__(self):
         return f"\nCompressionMethod: {self.compression_method} \nFileNameLen: {self.file_name_length} \nFileName: {self.file_name} \nStartDisk: {self.disk_number_start} \nCompressedSize: {self.compressed_size} \nUncompressedSize: {self.uncompressed_size}"

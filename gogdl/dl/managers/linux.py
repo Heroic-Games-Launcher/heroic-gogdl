@@ -9,6 +9,7 @@ from zlib import crc32
 from gogdl.dl import dl_utils
 from gogdl.dl.managers.task_executor import ExecutingManager
 from gogdl.dl.objects.generic import BaseDiff
+from gogdl.dl.objects.v2 import DepotLink
 from gogdl.dl.workers import linux as linux_worker
 from gogdl.dl.objects import linux
 from gogdl import constants
@@ -218,9 +219,12 @@ class Manager:
             invalid = list()
             for file in new:
                 path = file.file_name.replace("data/noarch", self.path)
+
                 if not os.path.exists(path):
                     invalid.append(file)
                 else:
+                    if file.is_symlink():
+                        continue
                     with open(path, 'rb') as fh:
                         sum = 0
                         while data := fh.read(1024*1024):
@@ -255,9 +259,15 @@ class Manager:
             size = file.uncompressed_size
             method = file.compression_method
             checksum = file.crc32
-            file_permissions = int(bin(int.from_bytes(file.ext_file_attrs, "little"))[9:][:9])
+
+            path = file.file_name.replace("data/noarch", self.path)
+            if file.is_symlink():
+                data = handler.get_bytes_from_file(from_b=data_start, size=c_size, add_archive_index=False)
+                diff.links.append(DepotLink({"path": path, "target": os.path.normpath(os.path.join(dl_utils.parent_dir(path), data.decode()))}))
+                continue
+            file_permissions = int(bin(int.from_bytes(file.ext_file_attrs, "little"))[3:][:9])
             executable = (file_permissions & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)) != 0
-            final_files.append(linux.LinuxFile(file.product, file.file_name.replace("data/noarch", self.path), method, data_start, c_size, size, checksum, executable))
+            final_files.append(linux.LinuxFile(file.product, path, method, data_start, c_size, size, checksum, executable))
 
         diff.new = final_files
 

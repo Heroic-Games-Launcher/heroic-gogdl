@@ -269,7 +269,7 @@ class Writer(Process):
                 dest = task.old_destination or task.destination
                 # Windows will likely not have this ran ever
                 if os.path.exists(task_path):
-                    shutil.rmtree(task_path)
+                    os.unlink(task_path)
                 os.symlink(dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file)), task_path)
                 self.results_queue.put(WriterTaskResult(True, task))
                 continue
