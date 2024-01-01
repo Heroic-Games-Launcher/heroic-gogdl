@@ -1,3 +1,6 @@
+from io import BytesIO
+
+
 END_OF_CENTRAL_DIRECTORY = b"\x50\x4b\x05\x06"
 CENTRAL_DIRECTORY = b"\x50\x4b\x01\x02"
 LOCAL_FILE_HEADER = b"\x50\x4b\x03\x04"
@@ -87,7 +90,7 @@ class CentralDirectoryFile:
         self.ext_file_attrs: bytes
         self.relative_local_file_offset: int
         self.file_name: str
-        self.extra_field: bytes
+        self.extra_field: BytesIO 
         self.comment: bytes
         self.last_byte: int
 
@@ -115,9 +118,34 @@ class CentralDirectoryFile:
         extra_field_start = 46 + cd_file.file_name_length
         cd_file.file_name = bytes(data[46:extra_field_start]).decode()
 
-        cd_file.extra_field = data[
+        cd_file.extra_field = BytesIO(data[
                               extra_field_start: extra_field_start + cd_file.extra_field_length
-                              ]
+                              ])
+
+        field = None
+        while True:
+            id = int.from_bytes(cd_file.extra_field.read(2), "little")
+            size = int.from_bytes(cd_file.extra_field.read(2), "little")
+
+            if id == 0x01:
+                field = BytesIO(cd_file.extra_field.read(size))
+                break
+            
+            cd_file.extra_field.seek(size, 1)
+
+            if cd_file.extra_field_length - cd_file.extra_field.tell() > 0:
+                break
+
+        if field:
+            if cd_file.uncompressed_size == 0xFFFFFFFF:
+                cd_file.uncompressed_size = int.from_bytes(field.read(8), "little")
+
+            if cd_file.compressed_size == 0xFFFFFFFF:
+                cd_file.compressed_size = int.from_bytes(field.read(8), "little")
+
+            if cd_file.relative_local_file_offset == 0xFFFFFFFF:
+                cd_file.relative_local_file_offset = int.from_bytes(field.read(8), "little")
+
         comment_start = extra_field_start + cd_file.extra_field_length
         cd_file.comment = data[
                           comment_start: comment_start + cd_file.file_comment_length
