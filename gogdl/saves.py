@@ -299,7 +299,7 @@ class CloudStorageManager:
                 .timestamp()
             )
             os.utime(file.absolute_path, (f_timestamp, f_timestamp))
-        except ValueError:
+        except (ValueError, TypeError):
             self.logger.warning(f"Incorrect LastModified header for file {file.relative_path} {response.headers.get('X-Object-Meta-LocalLastModified')} ; Ignoring...")
             pass 
 
