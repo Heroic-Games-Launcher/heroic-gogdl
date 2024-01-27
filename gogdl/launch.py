@@ -3,6 +3,7 @@ import json
 import sys
 import subprocess
 import time
+from gogdl.dl.dl_utils import get_case_insensitive_name
 from ctypes import *
 from gogdl.process import Process
 import signal
@@ -54,7 +55,7 @@ def launch(arguments, unknown_args):
         working_dir = os.path.join(arguments.path, relative_working_dir)
 
         if not os.path.exists(executable):
-            executable = get_case_insensitive_name(arguments.path, executable)
+            executable = get_case_insensitive_name(executable)
 
         if len(wrapper) > 0 and wrapper[0] is not None:
             command.extend(wrapper)
@@ -93,7 +94,7 @@ def launch(arguments, unknown_args):
     print("Launch command:", command)
     # Handle case sensitive file systems
     if not os.path.exists(working_dir):
-        working_dir = get_case_insensitive_name(arguments.path, working_dir)
+        working_dir = get_case_insensitive_name(working_dir)
 
     status = None
     if sys.platform == 'linux':
@@ -214,13 +215,3 @@ def load_game_info(path, id, platform):
         return json.loads(data)
 
 
-def get_case_insensitive_name(root, path):
-    if not root[len(root) - 1] in ["/", "\\"]:
-        root = root + "/"
-    s_working_dir = path.replace(root, "").split(os.sep)
-    for directory in s_working_dir:
-        dir_list = os.listdir(root)
-        for existing_dir in dir_list:
-            if existing_dir.lower() == directory.lower():
-                root = os.path.join(root, existing_dir)
-    return root

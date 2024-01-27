@@ -1,107 +1,112 @@
+import queue
+from multiprocessing import Queue
 import threading
 import logging
 from time import sleep, time
 
 
 class ProgressBar(threading.Thread):
-    def __init__(self, max_val, total_readable_size, length):
+    def __init__(self, max_val: int, speed_queue: Queue, write_queue: Queue):
         self.logger = logging.getLogger("PROGRESS")
         self.downloaded = 0
         self.total = max_val
-        self.length = length
+        self.speed_queue = speed_queue
+        self.write_queue = write_queue
         self.started_at = time()
         self.last_update = time()
-        self.total_readable_size = total_readable_size
         self.completed = False
 
-        self.read_total = 0
-        self.written_total = 0
+        self.decompressed = 0
 
-        self.written_since_last_update = 0
-        self.read_since_last_update = 0
         self.downloaded_since_last_update = 0
         self.decompressed_since_last_update = 0
+        self.written_since_last_update = 0
+        self.read_since_last_update = 0
 
-        super().__init__(target=self.print_progressbar)
+        self.written_total = 0
 
+        super().__init__(target=self.loop)
+
+    def loop(self):
+        while not self.completed:
+            self.print_progressbar()
+            self.downloaded_since_last_update = self.decompressed_since_last_update = 0
+            self.written_since_last_update = self.read_since_last_update = 0
+            timestamp = time()
+            while not self.completed and (time() - timestamp) < 1:
+                try:
+                    dl, dec = self.speed_queue.get_nowait()
+                    self.downloaded_since_last_update += dl
+                    self.decompressed_since_last_update += dec
+                except queue.Empty:
+                    pass
+                try:
+                    wr, r = self.write_queue.get_nowait()
+                    self.written_since_last_update += wr
+                    self.read_since_last_update += r
+                except queue.Empty:
+                    pass
+                
+        self.print_progressbar()
     def print_progressbar(self):
-        done = 0
+        percentage = (self.written_total / self.total) * 100
+        running_time = time() - self.started_at
+        runtime_h = int(running_time // 3600)
+        runtime_m = int((running_time % 3600) // 60)
+        runtime_s = int((running_time % 3600) % 60)
 
-        while True:
-            if self.completed:
-                break
-            percentage = (self.downloaded / self.total) * 100
-            running_time = time() - self.started_at
-            runtime_h = int(running_time // 3600)
-            runtime_m = int((running_time % 3600) // 60)
-            runtime_s = int((running_time % 3600) % 60)
+        print_time_delta = time() - self.last_update
+        
+        current_dl_speed = 0
+        current_decompress = 0
+        if print_time_delta:
+            current_dl_speed = self.downloaded_since_last_update / print_time_delta
+            current_decompress = self.decompressed_since_last_update / print_time_delta
+            current_w_speed = self.written_since_last_update / print_time_delta
+            current_r_speed = self.read_since_last_update / print_time_delta
+        else:
+            current_w_speed = 0
+            current_r_speed = 0
 
-            time_since_last_update = time() - self.last_update
-            if time_since_last_update == 0:
-                time_since_last_update = 1
-            size_left = self.total - self.downloaded
+        if percentage > 0:
+            estimated_time = (100 * running_time) / percentage - running_time
+        else:
+            estimated_time = 0
+        estimated_time = max(estimated_time, 0) # Cap to 0
 
-            # average_speed = self.downloaded / running_time
+        estimated_h = int(estimated_time // 3600)
+        estimated_time = estimated_time % 3600
+        estimated_m = int(estimated_time // 60)
+        estimated_s = int(estimated_time % 60)
 
-            if percentage > 0:
-                estimated_time = (100 * running_time) / percentage - running_time
-            else:
-                estimated_time = 0
+        self.logger.info(
+            f"= Progress: {percentage:.02f} {self.written_total}/{self.total}, "
+            + f"Running for: {runtime_h:02d}:{runtime_m:02d}:{runtime_s:02d}, "
+            + f"ETA: {estimated_h:02d}:{estimated_m:02d}:{estimated_s:02d}"
+        )
 
-            estimated_h = int(estimated_time // 3600)
-            estimated_time = estimated_time % 3600
-            estimated_m = int(estimated_time // 60)
-            estimated_s = int(estimated_time % 60)
+        self.logger.info(
+            f"= Downloaded: {self.downloaded / 1024 / 1024:.02f} MiB, "
+            f"Written: {self.written_total / 1024 / 1024:.02f} MiB"
+        )
 
-            write_speed = self.written_since_last_update / time_since_last_update
-            read_speed = self.read_since_last_update / time_since_last_update
-            download_speed = self.downloaded_since_last_update / time_since_last_update
-            decompress_speed = (
-                self.decompressed_since_last_update / time_since_last_update
-            )
+        self.logger.info(
+            f" + Download\t- {current_dl_speed / 1024 / 1024:.02f} MiB/s (raw) "
+            f"/ {current_decompress / 1024 / 1024:.02f} MiB/s (decompressed)"
+        )
 
-            self.read_total += self.read_since_last_update
-            self.written_total += self.written_since_last_update
-            self.downloaded += self.downloaded_since_last_update
+        self.logger.info(
+            f" + Disk\t- {current_w_speed / 1024 / 1024:.02f} MiB/s (write) / "
+            f"{current_r_speed / 1024 / 1024:.02f} MiB/s (read)"
+        )
 
-            self.read_since_last_update = self.written_since_last_update = 0
-            self.decompressed_since_last_update = self.downloaded_since_last_update = 0
-
-            self.logger.info(
-                f"= Progress: {percentage:.02f} {self.downloaded}/{self.total}, "
-                + f"Running for: {runtime_h:02d}:{runtime_m:02d}:{runtime_s:02d}, "
-                + f"ETA: {estimated_h:02d}:{estimated_m:02d}:{estimated_s:02d}"
-            )
-
-            self.logger.info(
-                f"= Downloaded: {self.downloaded / 1024 / 1024:.02f} MiB, "
-                f"Written: {self.written_total / 1024 / 1024:.02f} MiB"
-            )
-
-            self.logger.info(
-                f" + Download\t- {download_speed / 1024 / 1024:.02f} MiB/s (raw) "
-                f"/ {decompress_speed / 1024 / 1024:.02f} MiB/s (decompressed)"
-            )
-
-            self.logger.info(
-                f" + Disk\t- {write_speed / 1024 / 1024:.02f} MiB/s (write) / "
-                f"{read_speed / 1024 / 1024:.02f} MiB/s (read)"
-            )
-
-            self.last_update = time()
-            sleep(1)
+        self.last_update = time()
 
     def update_downloaded_size(self, addition):
         self.downloaded += addition
 
-    def update_download_speed(self, addition):
-        self.downloaded_since_last_update += addition
-
-    def update_decompressed_speed(self, addition):
-        self.decompressed_since_last_update += addition
-
-    def update_bytes_read(self, addition):
-        self.read_since_last_update += addition
+    def update_decompressed_size(self, addition):
+        self.decompressed += addition
 
     def update_bytes_written(self, addition):
-        self.written_since_last_update += addition
+        self.written_total += addition

@@ -6,6 +6,8 @@ from multiprocessing import cpu_count
 from gogdl.dl import dl_utils
 from gogdl import version
 import gogdl.constants as constants
+from gogdl import version
+
 
 
 class ApiHandler:
@@ -27,7 +29,9 @@ class ApiHandler:
         self.endpoints = dict()  # Map of secure link endpoints
         self.working_on_ids = list()  # List of products we are waiting for to complete getting the secure link
 
-    def get_item_data(self, id, expanded=[]):
+    def get_item_data(self, id, expanded=None):
+        if expanded is None:
+            expanded = []
         self.logger.info(f"Getting info from products endpoint for id: {id}")
         url = f'{constants.GOG_API}/products/{id}'
         expanded_arg = '?expand='
@@ -48,7 +52,7 @@ class ApiHandler:
         if response.ok:
             return response.json()
 
-    def get_dependenices_list(self, depot_version=2):
+    def get_dependencies_repo(self, depot_version=2):
         self.logger.info("Getting Dependencies repository")
         url = constants.DEPENDENCIES_URL if depot_version == 2 else constants.DEPENDENCIES_V1_URL
         response = self.session.get(url)
@@ -56,9 +60,7 @@ class ApiHandler:
             return None
 
         json_data = json.loads(response.content)
-        if 'repository_manifest' in json_data:
-            self.logger.info("Getting repository manifest")
-            return dl_utils.get_zlib_encoded(self, str(json_data['repository_manifest']), self.logger)[0], json_data.get('version')
+        return json_data
 
     def does_user_own(self, id):
         if not self.owned:

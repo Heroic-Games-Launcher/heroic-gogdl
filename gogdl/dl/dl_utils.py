@@ -2,35 +2,39 @@ import json
 import zlib
 import os
 import gogdl.constants as constants
+from gogdl.dl.objects import v1, v2
 import shutil
 import time
 import requests
-from sys import exit
+from sys import exit, platform
 
 PATH_SEPARATOR = os.sep
 TIMEOUT = 10
 
 
 def get_json(api_handler, url):
-    x = api_handler.session.get(url)
+    x = api_handler.session.get(url, headers={"Accept": "application/json"})
     if not x.ok:
         return
     return x.json()
 
 
-def get_zlib_encoded(api_handler, url, logger=None):
-    r = requests.get(url, headers=api_handler.session.headers, timeout=TIMEOUT)
-    if r.status_code != 200:
-        if logger:
-            logger.info("zlib response != 200")
-        return
-    try:
-        decompressed = json.loads(zlib.decompress(r.content, 15))
-    except zlib.error:
-        if logger:
-            logger.info("error decompressing response")
-        return json.loads(r.content), r.headers
-    return decompressed, r.headers
+def get_zlib_encoded(api_handler, url):
+    retries = 5
+    while retries > 0:
+        try:
+            x = api_handler.session.get(url, timeout=TIMEOUT)
+            if not x.ok:
+                return None, None
+            try:
+                decompressed = json.loads(zlib.decompress(x.content, 15))
+            except zlib.error:
+                return x.json(), x.headers
+            return decompressed, x.headers
+        except Exception:
+            time.sleep(2)
+            retries-=1
+    return None, None
 
 
 def prepare_location(path, logger=None):
@@ -47,49 +51,41 @@ def galaxy_path(manifest: str):
     return galaxy_path
 
 
-def get_secure_link(api_handler, path, gameId, generation=2, logger=None):
+def get_secure_link(api_handler, path, gameId, generation=2, logger=None, root=None):
     url = ""
     if generation == 2:
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&generation=2&path={path}"
     elif generation == 1:
         url = f"{constants.GOG_CONTENT_SYSTEM}/products/{gameId}/secure_link?_version=2&type=depot&path={path}"
+    if root:
+        url += f"&root={root}"
 
     try:
         r = requests.get(url, headers=api_handler.session.headers, timeout=TIMEOUT)
     except BaseException as exception:
-        logger.info(exception)
+        if logger:
+            logger.info(exception)
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation, logger)
 
     if r.status_code != 200:
-        logger.info("invalid secure link response")
+        if logger:
+            logger.info("invalid secure link response")
         time.sleep(0.2)
         return get_secure_link(api_handler, path, gameId, generation, logger)
-        
 
     js = r.json()
 
-    endpoint = classify_cdns(js["urls"], generation)
-    url_format = endpoint["url_format"]
-    parameters = endpoint["parameters"]
-    if generation == 1:
-        if parameters.get("path"):
-            parameters["path"] = parameters["path"] + "/main.bin"
+    return js['urls']
 
-        return merge_url_with_params(url_format, parameters)
-
-    return endpoint
-
-
-def get_dependency_link(api_handler, path):
+def get_dependency_link(api_handler):
     data = get_json(
         api_handler,
-        f"{constants.GOG_CONTENT_SYSTEM}/open_link?generation=2&_version=2&path=/dependencies/store/"
-        + path,
+        f"{constants.GOG_CONTENT_SYSTEM}/open_link?generation=2&_version=2&path=/dependencies/store/",
     )
-    endpoint = classify_cdns(data["urls"])
-    url = endpoint["url"]
-    return url
+    if not data:
+        return None
+    return data["urls"]
 
 
 def merge_url_with_params(url, parameters):
@@ -101,21 +97,7 @@ def merge_url_with_params(url, parameters):
 
 
 def parent_dir(path: str):
-    return path[0: path.rindex(PATH_SEPARATOR)]
-
-
-def classify_cdns(cdns, generation=2):
-    best = None
-    for cdn in cdns:
-        if generation not in cdn["supports_generation"]:
-            continue
-        if not best:
-            best = cdn
-        else:
-            if best["priority"] < cdn["priority"]:
-                best = cdn
-
-    return best
+    return os.path.split(path)[0]
 
 
 def calculate_sum(path, function, read_speed_function=None):
@@ -142,7 +124,7 @@ def get_readable_size(size):
     return size, power_labels[n] + "B"
 
 
-def check_free_space(size, path):
+def check_free_space(size: int, path: str):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
     _, _, available_space = shutil.disk_usage(path)
@@ -154,3 +136,44 @@ def get_range_header(offset, size):
     from_value = offset
     to_value = (int(offset) + int(size)) - 1
     return f"bytes={from_value}-{to_value}"
+
+# Creates appropriate Manifest class based on provided meta from json
+def create_manifest_class(meta: dict, api_handler):
+    version = meta.get("version") 
+    if version == 1:
+        return v1.Manifest.from_json(meta, api_handler)
+    else:
+        return v2.Manifest.from_json(meta, api_handler)
+
+def get_case_insensitive_name(path):
+    if platform == "win32" or os.path.exists(path):
+        return path
+    root = path
+    # Find existing directory
+    while not os.path.exists(root):
+        root = os.path.split(root)[0]
+    
+    if not root[len(root) - 1] in ["/", "\\"]:
+        root = root + os.sep
+    # Separate unknown path from existing one
+    s_working_dir = path.replace(root, "").split(os.sep)
+    paths_to_find = len(s_working_dir)
+    paths_found = 0
+    for directory in s_working_dir:
+        if not os.path.exists(root):
+            break
+        dir_list = os.listdir(root)
+        found = False
+        for existing_dir in dir_list:
+            if existing_dir.lower() == directory.lower():
+                root = os.path.join(root, existing_dir)
+                paths_found += 1
+                found = True
+        if not found:
+            root = os.path.join(root, directory)
+            paths_found += 1
+
+    if paths_to_find != paths_found:
+        root = os.path.join(root, os.sep.join(s_working_dir[paths_found:]))
+    return root
+

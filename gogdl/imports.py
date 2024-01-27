@@ -23,6 +23,9 @@ def get_info(args, unknown_args):
     installed_language = None
     info = {}
     if platform != "linux":
+        if not info_file:
+            print("Error importing, no info file")
+            return
         f = open(info_file, "r")
         info = json.loads(f.read())
         f.close()
@@ -42,22 +45,22 @@ def get_info(args, unknown_args):
             f.close()
             build_id = build.get("buildId")
 
-    version_name = build_id
-    if build_id and platform != "linux":
-        # Get version name
-        builds_res = requests.get(
-            f"{constants.GOG_CONTENT_SYSTEM}/products/{game_id}/os/{platform}/builds?generation=2",
-            headers={
-                "User-Agent": "GOGGalaxyCommunicationService/2.0.4.164 (Windows_32bit)"
-            },
-        )
-        builds = builds_res.json()
-        target_build = builds["items"][0]
-        for build in builds["items"]:
-            if build["build_id"] == build_id:
-                target_build = build
-                break
-        version_name = target_build["version_name"]
+        version_name = build_id
+        if build_id and platform != "linux":
+            # Get version name
+            builds_res = requests.get(
+                f"{constants.GOG_CONTENT_SYSTEM}/products/{game_id}/os/{platform}/builds?generation=2",
+                headers={
+                    "User-Agent": "GOGGalaxyCommunicationService/2.0.4.164 (Windows_32bit)"
+                },
+            )
+            builds = builds_res.json()
+            target_build = builds["items"][0]
+            for build in builds["items"]:
+                if build["build_id"] == build_id:
+                    target_build = build
+                    break
+            version_name = target_build["version_name"]
     if platform == "linux" and os.path.exists(os.path.join(path, "gameinfo")):
         # Linux version installed using installer
         gameinfo_file = open(os.path.join(path, "gameinfo"), "r")
@@ -82,7 +85,7 @@ def get_info(args, unknown_args):
                 "title": title,
                 "tasks": info["playTasks"] if info and info.get("playTasks") else None,
                 "installedLanguage": installed_language,
-                "installedWithDlcs": with_dlcs,
+                "dlcs": with_dlcs,
                 "platform": platform,
                 "versionName": version_name,
             }
@@ -91,20 +94,38 @@ def get_info(args, unknown_args):
 
 
 def load_game_details(path):
+    base_path = path
     found = glob.glob(os.path.join(path, "goggame-*.info"))
     build_id = glob.glob(os.path.join(path, "goggame-*.id"))
     platform = "windows"
     if not found:
+        base_path = os.path.join(path, "Contents", "Resources")
         found = glob.glob(os.path.join(path, "Contents", "Resources", "goggame-*.info"))
         build_id = glob.glob(
             os.path.join(path, "Contents", "Resources", "goggame-*.id")
         )
         platform = "osx"
     if not found:
+        base_path = os.path.join(path, "game")
         found = glob.glob(os.path.join(path, "game", "goggame-*.info"))
         build_id = glob.glob(os.path.join(path, "game", "goggame-*.id"))
         platform = "linux"
     if not found:
         if os.path.exists(os.path.join(path, "gameinfo")):
-            return (None, None, "linux", False)
-    return (found[0], build_id[0] if build_id else None, platform, len(found) > 1)
+            return (None, None, "linux", [])
+
+    root_id = None
+    # Array of DLC game ids
+    dlcs = []
+    for info in found:
+        with open(info) as info_file:
+            data = json.load(info_file)
+            if not root_id:
+                root_id = data.get("rootGameId")
+            if data["gameId"] == root_id:
+                continue
+            
+            dlcs.append(data["gameId"])
+
+    return (os.path.join(base_path, f"goggame-{root_id}.info"), os.path.join(base_path, f"goggame-{root_id}.id") if build_id else None, platform, dlcs)
+
