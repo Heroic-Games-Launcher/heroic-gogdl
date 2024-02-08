@@ -105,7 +105,7 @@ class AuthorizationManager:
         try:
             response = self.session.get(url, timeout=10)
         except (
-            requests.exceptions.ConnectionError or requests.exception.ConnectionTimeout
+            requests.ConnectionError or requests.Timeout
         ):
             self.logger.error("Failed to refresh credentials")
             return False
