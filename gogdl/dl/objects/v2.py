@@ -107,6 +107,7 @@ class Manifest:
         for depot in self.all_depots:
             if not depot.product_id in data:
                 data[depot.product_id] = dict()
+                data[depot.product_id]['*'] = {"download_size": 0, "disk_size": 0}
             product_data = data[depot.product_id]
             for lang in depot.languages:
                 if not lang in product_data:
