@@ -46,6 +46,7 @@ class ProgressBar(threading.Thread):
                     self.read_since_last_update += r
                 except queue.Empty:
                     pass
+                sleep(0.2)
                 
         self.print_progressbar()
     def print_progressbar(self):
