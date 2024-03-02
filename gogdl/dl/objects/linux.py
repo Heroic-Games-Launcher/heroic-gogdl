@@ -1,4 +1,5 @@
 from io import BytesIO
+import stat
 
 
 END_OF_CENTRAL_DIRECTORY = b"\x50\x4b\x05\x06"
@@ -93,6 +94,7 @@ class CentralDirectoryFile:
         self.extra_field: BytesIO 
         self.comment: bytes
         self.last_byte: int
+        self.file_data_offset: int
 
     @classmethod
     def from_bytes(cls, data, product):
@@ -114,6 +116,7 @@ class CentralDirectoryFile:
         cd_file.int_file_attrs = data[36:38]
         cd_file.ext_file_attrs = data[38:42]
         cd_file.relative_local_file_offset = int.from_bytes(data[42:46], "little")
+        cd_file.file_data_offset = 0
 
         extra_field_start = 46 + cd_file.file_name_length
         cd_file.file_name = bytes(data[46:extra_field_start]).decode()
@@ -128,13 +131,15 @@ class CentralDirectoryFile:
             size = int.from_bytes(cd_file.extra_field.read(2), "little")
 
             if id == 0x01:
-                field = BytesIO(cd_file.extra_field.read(size))
+                if cd_file.extra_field_length - cd_file.extra_field.tell() >= size:
+                    field = BytesIO(cd_file.extra_field.read(size))
                 break
             
             cd_file.extra_field.seek(size, 1)
 
-            if cd_file.extra_field_length - cd_file.extra_field.tell() > 0:
+            if cd_file.extra_field_length - cd_file.extra_field.tell() == 0:
                 break
+        
 
         if field:
             if cd_file.uncompressed_size == 0xFFFFFFFF:
@@ -156,7 +161,7 @@ class CentralDirectoryFile:
         return cd_file, comment_start + cd_file.file_comment_length
     
     def is_symlink(self):
-        return (int.from_bytes(self.ext_file_attrs, "little") & 1 << 29) != 0
+        return stat.S_ISLNK(int.from_bytes(self.ext_file_attrs, "little") >> 16)
 
     def as_dict(self):
         return {'file_name': self.file_name, 'crc32': self.crc32, 'compressed_size': self.compressed_size, 'size': self.uncompressed_size, 'is_symlink': self.is_symlink()}
@@ -184,6 +189,15 @@ class CentralDirectory:
             cd_file, next_offset = central_dir.create_central_dir_file(data, product)
             central_dir.files.append(cd_file)
             data = data[next_offset:]
+            if record == 0:
+                continue
+            
+            prev_i = record - 1
+            if not (prev_i >= 0 and prev_i < len(central_dir.files)):
+                continue
+            prev = central_dir.files[prev_i]
+            prev.file_data_offset = cd_file.relative_local_file_offset - prev.compressed_size
+        
         return central_dir
 
 class Zip64EndOfCentralDirLocator:
@@ -323,8 +337,10 @@ class InstallerHandler:
 
         end_of_cd_header_data_index = end_of_cd_data.find(END_OF_CENTRAL_DIRECTORY)
         zip64_end_of_cd_locator_index = end_of_cd_data.find(ZIP_64_END_OF_CD_LOCATOR)
+        assert end_of_cd_header_data_index != -1
         end_of_cd = EndOfCentralDir.from_bytes(end_of_cd_data[end_of_cd_header_data_index:])
         if end_of_cd.central_directory_offset == 0xFFFFFFFF:
+            assert zip64_end_of_cd_locator_index != -1
             # We need to find zip64 headers
 
             zip64_end_of_cd_locator = Zip64EndOfCentralDirLocator.from_bytes(end_of_cd_data[zip64_end_of_cd_locator_index:])
@@ -345,9 +361,13 @@ class InstallerHandler:
             size=self.size_of_central_directory,
         )
 
+        assert central_directory_data[:4] == CENTRAL_DIRECTORY
+
         self.central_directory = CentralDirectory.from_bytes(
             central_directory_data, self.central_directory_records, self.product
         )
+        last_entry = self.central_directory.files[-1]
+        last_entry.file_data_offset = self.central_directory_offset - last_entry.compressed_size
 
 
 class LinuxFile:

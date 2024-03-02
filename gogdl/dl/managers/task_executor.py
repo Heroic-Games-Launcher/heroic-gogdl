@@ -529,18 +529,27 @@ class ExecutingManager:
         self.shared_memory.close()
         self.shared_memory.unlink()
         self.shared_memory = None
+        self.manager.shutdown()
 
 
     def shutdown(self):
         self.logger.debug("Stopping progressbar")
         self.progress.completed = True
         
+        # Clear speed queues
+        for q in [self.download_speed_updates, self.writer_speed_updates]:
+            while True:
+                try:
+                    _ = q.get_nowait()
+                except Empty:
+                    break
 
         self.logger.debug("Sending terminate instruction to workers")
         for _ in range(self.allowed_threads):
             self.download_queue.put(generic.TerminateWorker())
         
         self.writer_queue.put(generic.TerminateWorker())
+
         for worker in self.download_workers:
             worker.join(timeout=2)
             if worker.is_alive():
@@ -567,6 +576,8 @@ class ExecutingManager:
 
         with self.shm_cond:
             self.shm_cond.notify()
+
+        self.manager.shutdown()
 
         try:
             if os.path.exists(self.resume_file):

@@ -241,7 +241,7 @@ class Manager:
         diff = BaseDiff()
 
         final_files = list()
-        for file in new:
+        for i, file in enumerate(new):
             # Prepare file for download
             # Calculate data offsets 
             handler = None
@@ -254,7 +254,7 @@ class Manager:
                 print("Orphan file found")
                 continue
             
-            data_start = handler.start_of_archive_index + file.relative_local_file_offset + 34 + file.file_name_length + file.extra_field_length
+            data_start = handler.start_of_archive_index + file.file_data_offset
             c_size = file.compressed_size
             size = file.uncompressed_size
             method = file.compression_method
