@@ -4,7 +4,7 @@ GOG download module for [Heroic Games Launcher](https://github.com/Heroic-Games-
 
 ## Important note
 
-This is **not** user friendly cli, it's meant to be used by some other application wanting to download game files, manage cloud saves or conviniently launch the game
+This is **not** user friendly cli, it's meant to be used by some other application wanting to download game files, manage cloud saves or conveniently launch the game
 
 ## Contributing
 
