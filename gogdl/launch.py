@@ -7,10 +7,29 @@ from gogdl.dl.dl_utils import get_case_insensitive_name
 from ctypes import *
 from gogdl.process import Process
 import signal
+import shutil
 import shlex
 
 class NoMoreChildren(Exception):
     pass
+
+def get_flatpak_command(id: str) -> list[str]:
+    if sys.platform != "linux":
+        return []
+    new_process_command = []
+    process_command = ["flatpak", "info", id] 
+    if os.path.exists("/.flatpak-info"):
+        spawn_test = subprocess.run(["flatpak-spawn", "--host" "ls"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if spawn_test.returncode == 0:
+            new_process_command = ["flatpak-spawn", "--host"]
+            process_command = new_process_command + process_command
+
+    output = subprocess.run(process_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    
+    if output.returncode == 0:
+        return new_process_command + ["flatpak", "run", id]
+    return []
+
 
 # Supports launching linux builds
 def launch(arguments, unknown_args):
@@ -42,6 +61,7 @@ def launch(arguments, unknown_args):
         if launch_arguments is None:
             launch_arguments = []
         if type(launch_arguments) == str:
+            launch_arguments = launch_arguments.replace('\\', '/')
             launch_arguments = shlex.split(launch_arguments)
         if compatibility_flags is None:
             compatibility_flags = []
@@ -57,13 +77,35 @@ def launch(arguments, unknown_args):
         if not os.path.exists(executable):
             executable = get_case_insensitive_name(executable)
 
+        if sys.platform != "win32" and arguments.platform == 'windows' and not arguments.override_exe:
+            if "scummvm.exe" in executable.lower():
+                flatpak_scummvm = get_flatpak_command("org.scummvm.ScummVM")
+                native_scummvm = shutil.which("scummvm")
+                if native_scummvm:
+                    native_scummvm = [native_scummvm]
+            
+                native_runner = flatpak_scummvm or native_scummvm
+                if native_runner:
+                    wrapper = native_runner
+                    executable = None
+            elif "dosbox.exe" in executable.lower():
+                flatpak_dosbox = get_flatpak_command("io.github.dosbox-staging")
+                native_dosbox= shutil.which("dosbox")
+                if native_dosbox:
+                    native_dosbox = [native_dosbox]
+                
+                native_runner = flatpak_dosbox or native_dosbox
+                if native_runner:
+                    wrapper = native_runner
+                    executable = None
+
         if len(wrapper) > 0 and wrapper[0] is not None:
             command.extend(wrapper)
 
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
-        else:
+        elif executable:
             command.append(executable)
         command.extend(launch_arguments)
     else:
