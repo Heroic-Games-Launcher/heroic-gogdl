@@ -110,6 +110,13 @@ class Manager:
 
                     linux_installers = self.filter_linux_installers(dlc["downloads"]["installers"])
                     installer = self.find_matching_installer(linux_installers)
+
+                    if installer is None:
+                        self.logger.error(
+                            dlc["title"] + " - Does not have a linux installer"
+                        )
+                        continue
+
                     installer_data = dl_utils.get_json(self.api_handler, installer["files"][0]["downlink"])
 
                     install_handler = linux.InstallerHandler(installer_data["downlink"],
