@@ -103,6 +103,7 @@ class DependenciesManager:
 
         if not len(diff.changed) and not len(diff.deleted) and not len(diff.new):
             self.logger.info("Nothing to do")
+            self._write_manifest(installed)
             return
 
         secure_link = dl_utils.get_dependency_link(self.api) # This should never expire
@@ -116,12 +117,13 @@ class DependenciesManager:
         if cancelled:
             return
 
-        repository = self.repository 
-        repository['HGLInstalled'] = list(installed)
+        self._write_manifest(installed)
 
-        json_repository = json.dumps(repository)
+    def _write_manifest(self, installed: set):
+        repository = self.repository
+        repository['HGLInstalled'] = list(installed)
         with open(self.installed_manifest, 'w') as f:
-            f.write(json_repository) 
+            json.dump(repository, f)
 
 
 class DependenciesDiff(BaseDiff):
