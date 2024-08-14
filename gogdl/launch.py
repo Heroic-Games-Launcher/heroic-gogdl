@@ -19,15 +19,24 @@ def get_flatpak_command(id: str) -> list[str]:
     new_process_command = []
     process_command = ["flatpak", "info", id] 
     if os.path.exists("/.flatpak-info"):
-        spawn_test = subprocess.run(["flatpak-spawn", "--host" "ls"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if spawn_test.returncode == 0:
-            new_process_command = ["flatpak-spawn", "--host"]
-            process_command = new_process_command + process_command
+        try:
+            spawn_test = subprocess.run(["flatpak-spawn", "--host", "ls"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except FileNotFoundError:
+            return []
+        if spawn_test.returncode != 0:
+            return []
 
-    output = subprocess.run(process_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    
-    if output.returncode == 0:
-        return new_process_command + ["flatpak", "run", id]
+        new_process_command = ["flatpak-spawn", "--host"]
+        process_command = new_process_command + process_command
+
+    try:
+        output = subprocess.run(process_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        if output.returncode == 0:
+            return new_process_command + ["flatpak", "run", id]
+
+    except FileNotFoundError:
+        pass
     return []
 
 
