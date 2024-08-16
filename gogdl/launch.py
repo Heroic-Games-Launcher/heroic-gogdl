@@ -213,7 +213,8 @@ def launch(arguments, unknown_args):
 
 
     else:
-        process = subprocess.Popen(command, cwd=working_dir, env=environment)
+        process = subprocess.Popen(command, cwd=working_dir, env=environment,
+                                   shell=sys.platform=="win32")
         status = process.wait()
 
     sys.exit(status)
