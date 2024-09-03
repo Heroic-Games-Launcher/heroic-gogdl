@@ -56,7 +56,8 @@ class CloudStorageManager:
         self.logger = logging.getLogger("SAVES")
 
         self.session.headers.update(
-            {"User-Agent": "GOGGalaxyCommunicationService/2.0.4.164 (Windows_32bit)"}
+            {"User-Agent": "GOGGalaxyCommunicationService/2.0.13.27 (Windows_32bit) dont_sync_marker/true installation_source/gog",
+             "X-Object-Meta-User-Agent": "GOGGalaxyCommunicationService/2.0.13.27 (Windows_32bit) dont_sync_marker/true installation_source/gog"}
         )
 
         self.credentials = dict()
@@ -111,6 +112,7 @@ class CloudStorageManager:
         self.get_auth_token()
 
         cloud_files = self.get_cloud_files_list()
+        downloadable_cloud = [f for f in cloud_files if f.md5 != "aadd86936a80ee8a369579c3926f1b3c"]
 
         if len(local_files) > 0 and len(cloud_files) == 0:
             action = SyncAction.UPLOAD
@@ -118,13 +120,17 @@ class CloudStorageManager:
             for f in local_files:
                 self.upload_file(f)
             self.logger.info("Done")
+            sys.stdout.write(str(datetime.datetime.now().timestamp()))
+            sys.stdout.flush()
             return
         elif len(local_files) == 0 and len(cloud_files) > 0:
             self.logger.info("No files locally, downloading")
             action = SyncAction.DOWNLOAD
-            for f in cloud_files:
+            for f in downloadable_cloud:
                 self.download_file(f)
             self.logger.info("Done")
+            sys.stdout.write(str(datetime.datetime.now().timestamp()))
+            sys.stdout.flush()
             return
 
         timestamp = float(arguments.timestamp)
@@ -139,7 +145,7 @@ class CloudStorageManager:
                 action = SyncAction.UPLOAD
             elif prefered_action == "forcedownload":
                 self.logger.warning("Forcing download")
-                classifier.updated_cloud = cloud_files
+                classifier.updated_cloud = downloadable_cloud 
                 action = SyncAction.DOWNLOAD
             if prefered_action == "upload" and action == SyncAction.DOWNLOAD:
                 self.logger.warning("Refused to upload files, newer files in the cloud")
@@ -206,8 +212,10 @@ class CloudStorageManager:
             headers={"Accept": "application/json"},
         )
 
-        if not response.ok:
+        if response.status_code == 404:
             return []
+        else:
+            response.raise_for_status()
 
         json_res = response.json()
         # print(json_res)
@@ -309,6 +317,11 @@ class CloudStorageManager:
             self.logger.warning(f"Incorrect LastModified header for file {file.relative_path} {response.headers.get('X-Object-Meta-LocalLastModified')} ; Ignoring...")
             pass 
 
+    def commit_changes(self):
+        response = self.session.post(f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}")
+        if not response.ok:
+            print("Failed to commit")
+
 
 class SyncClassifier:
     def __init__(self):
@@ -348,6 +361,8 @@ class SyncClassifier:
                 classifier.updated_local.append(f)
 
         for f in cloud:
+            if f.md5 == "aadd86936a80ee8a369579c3926f1b3c":
+                continue
             if f.relative_path not in local_paths:
                 classifier.not_existing_locally.append(f)
             if f.update_ts > timestamp:
