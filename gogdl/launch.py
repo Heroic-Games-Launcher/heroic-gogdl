@@ -85,7 +85,12 @@ def launch(arguments, unknown_args):
 
         if not os.path.exists(executable):
             executable = get_case_insensitive_name(executable)
+        # Handle case sensitive file systems
+        if not os.path.exists(working_dir):
+            working_dir = get_case_insensitive_name(working_dir)
 
+        os.chdir(working_dir)
+        
         if sys.platform != "win32" and arguments.platform == 'windows' and not arguments.override_exe:
             if "scummvm.exe" in executable.lower():
                 flatpak_scummvm = get_flatpak_command("org.scummvm.ScummVM")
@@ -114,6 +119,8 @@ def launch(arguments, unknown_args):
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
+            if not os.path.exists(working_dir):
+                working_dir = get_case_insensitive_name(working_dir)
         elif executable:
             command.append(executable)
         command.extend(launch_arguments)
@@ -124,9 +131,13 @@ def launch(arguments, unknown_args):
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
+            # Handle case sensitive file systems
+            if not os.path.exists(working_dir):
+                working_dir = get_case_insensitive_name(working_dir)
         else:
             command.append(info)
 
+    os.chdir(working_dir)
     command.extend(unknown_args)
     environment = os.environ.copy()
     environment.update(envvars)
@@ -143,9 +154,6 @@ def launch(arguments, unknown_args):
             environment.update({"LD_LIBRARY_PATH": ":".join(splitted)})
     
     print("Launch command:", command)
-    # Handle case sensitive file systems
-    if not os.path.exists(working_dir):
-        working_dir = get_case_insensitive_name(working_dir)
 
     status = None
     if sys.platform == 'linux':
@@ -156,7 +164,7 @@ def launch(arguments, unknown_args):
         if result == -1:
             print("PR_SET_CHILD_SUBREAPER is not supported by your kernel (Linux 3.4 and above)")
         
-        process = subprocess.Popen(command, cwd=working_dir, env=environment)
+        process = subprocess.Popen(command, env=environment)
         process_pid = process.pid
 
         def iterate_processes():
@@ -222,7 +230,7 @@ def launch(arguments, unknown_args):
 
 
     else:
-        process = subprocess.Popen(command, cwd=working_dir, env=environment)
+        process = subprocess.Popen(command, env=environment)
         status = process.wait()
 
     sys.exit(status)
