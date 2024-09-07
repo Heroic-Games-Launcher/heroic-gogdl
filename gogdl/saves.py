@@ -320,7 +320,7 @@ class CloudStorageManager:
     def commit_changes(self):
         response = self.session.post(f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}")
         if not response.ok:
-            print("Failed to commit")
+            self.logger.error("Failed to commit")
 
 
 class SyncClassifier:
