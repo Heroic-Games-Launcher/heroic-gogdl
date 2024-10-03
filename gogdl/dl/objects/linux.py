@@ -285,11 +285,15 @@ class InstallerHandler:
         self.product = product_id
         self.session = session
         self.file_size = 0
+
+        SEARCH_OFFSET = 0
+        SEARCH_RANGE = 2 * 1024 * 1024 # 2 MiB
+
         beginning_of_file = self.get_bytes_from_file(
-            from_b=1024*512, size=1024*1024, add_archive_index=False
+            from_b=SEARCH_OFFSET, size=SEARCH_RANGE, add_archive_index=False
         )
         
-        self.start_of_archive_index = beginning_of_file.find(LOCAL_FILE_HEADER) + 1024*512
+        self.start_of_archive_index = beginning_of_file.find(LOCAL_FILE_HEADER) + SEARCH_OFFSET
 
         # ZIP contents
         self.central_directory_offset: int
