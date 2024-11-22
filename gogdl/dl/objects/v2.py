@@ -36,8 +36,8 @@ class Depot:
         self.languages = depot_data["languages"]
         self.bitness = depot_data.get("osBitness")
         self.product_id = depot_data["productId"]
-        self.compressed_size = depot_data.get("compressedSize")
-        self.size = depot_data["size"]
+        self.compressed_size = depot_data.get("compressedSize") or 0
+        self.size = depot_data.get("size") or 0
         self.manifest = depot_data["manifest"]
 
     def check_language(self):
