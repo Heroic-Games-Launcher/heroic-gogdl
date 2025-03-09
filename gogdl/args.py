@@ -220,5 +220,9 @@ def init_parser():
         required=True,
     )
 
+    # Languages
+
+    locale_parser = subparsers.add_parser("lang-match", help="Query GOG language data for given locale code/name")
+    locale_parser.add_argument("language", help="Language query to match")
 
     return parser.parse_known_args()

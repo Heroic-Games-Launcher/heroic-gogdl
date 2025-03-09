@@ -12,6 +12,7 @@ from gogdl.dl.objects.generic import BaseDiff
 from gogdl.dl.objects.v2 import DepotLink
 from gogdl.dl.workers import linux as linux_worker
 from gogdl.dl.objects import linux
+from gogdl.languages import Language
 from gogdl import constants
 
 
@@ -49,7 +50,7 @@ class Manager:
         else:
             self.path = ""
 
-        self.lang = self.arguments.lang
+        self.lang = Language.parse(self.arguments.lang)
         self.dlcs_should_be_downloaded = self.arguments.dlcs
         if self.arguments.dlcs_list:
             self.dlcs_list = self.arguments.dlcs_list.split(",")
@@ -92,7 +93,7 @@ class Manager:
         # Filter linux installers
         game_installers = self.filter_linux_installers(self.game_data["downloads"]["installers"])
 
-        self.languages_codes = [installer["language"] for installer in game_installers]
+        self.languages_codes = [Language.parse(installer["language"]) for installer in game_installers]
 
         self.game_installer = self.find_matching_installer(game_installers)
 
@@ -168,7 +169,7 @@ class Manager:
             "download_size": download_size,
             "disk_size": disk_size,
             "dlcs": dlcs,
-            "languages": self.languages_codes,
+            "languages": [lang.code for lang in self.languages_codes],
             "folder_name": self.folder_name,
             "dependencies": [],
             "versionName": self.game_installer["version"],

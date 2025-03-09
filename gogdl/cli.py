@@ -6,16 +6,22 @@ from gogdl.dl.managers import dependencies
 import gogdl.api as api
 import gogdl.imports as imports
 import gogdl.launch as launch
+import gogdl.languages as languages
 import gogdl.saves as saves
 import gogdl.auth as auth
 from gogdl import version as gogdl_version
+import json
 import logging
-
 
 
 def display_version():
     print(f"{gogdl_version}")
 
+
+def match_lang(arguments, unknown_arguments):
+    lang = languages.Language.parse(arguments.language)
+    data = lang.__dict__ if lang else {}
+    print(json.dumps(data))
 
 def main():
     arguments, unknown_args = args.init_parser()
@@ -54,7 +60,8 @@ def main():
             "launch": launch.launch,
             "save-sync": clouds_storage_manager.sync,
             "save-clear": clouds_storage_manager.clear,
-            "auth": authorization_manager.handle_cli
+            "auth": authorization_manager.handle_cli,
+            "lang-match": match_lang
         }
 
     function = switcher.get(arguments.command)

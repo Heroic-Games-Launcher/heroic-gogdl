@@ -3,6 +3,7 @@ import os
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v2
 from gogdl import constants
+from gogdl.languages import Language
 
 
 class Depot:
@@ -52,7 +53,7 @@ class Manifest:
         self.platform = platform
         self.data = meta
         self.data['HGLPlatform'] = platform
-        self.data["HGLInstallLanguage"] = language
+        self.data["HGLInstallLanguage"] = language.code
         self.data["HGLdlcs"] = dlcs
         self.product_id = meta["product"]["rootGameID"]
         self.dlcs = dlcs
@@ -69,7 +70,7 @@ class Manifest:
 
     @classmethod
     def from_json(cls, meta, api_handler):
-        manifest = cls(meta['HGLPlatform'], meta, meta['HGLInstallLanguage'], meta["HGLdlcs"], api_handler, False)
+        manifest = cls(meta['HGLPlatform'], meta, Language.parse(meta['HGLInstallLanguage']), meta["HGLdlcs"], api_handler, False)
         return manifest
     
     def serialize_to_json(self):
@@ -95,7 +96,7 @@ class Manifest:
         for depot in self.all_depots:
             for language in depot.languages:
                 if language != "Neutral":
-                    languages_dict.add(language)
+                    languages_dict.add(Language.parse(language).code)
 
         return list(languages_dict)
 

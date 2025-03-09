@@ -4,6 +4,7 @@ import os
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
 from gogdl import constants
+from gogdl.languages import Language
 
 
 class DepotFile:
@@ -46,7 +47,6 @@ class Depot:
             status = (
                     lang == "*"
                     or self.target_lang == lang
-                    or self.target_lang.split("-")[0] == lang
             )
             if status:
                 break
@@ -55,7 +55,7 @@ class Depot:
 class Manifest:
     def __init__(self, meta, language, dlcs, api_handler, dlc_only):
         self.data = meta
-        self.data["HGLInstallLanguage"] = language
+        self.data["HGLInstallLanguage"] = language.code
         self.data["HGLdlcs"] = dlcs
         self.product_id = meta["baseProductId"]
         self.dlcs = dlcs
@@ -74,7 +74,7 @@ class Manifest:
 
     @classmethod
     def from_json(cls, meta, api_handler):
-        manifest = cls(meta, meta["HGLInstallLanguage"], meta["HGLdlcs"], api_handler, False)
+        manifest = cls(meta, Language.parse(meta["HGLInstallLanguage"]), meta["HGLdlcs"], api_handler, False)
         return manifest
 
     def serialize_to_json(self):
@@ -99,7 +99,7 @@ class Manifest:
         for depot in self.all_depots:
             for language in depot.languages:
                 if language != "*":
-                    languages_dict.add(language)
+                    languages_dict.add(Language.parse(language).code)
 
         return list(languages_dict)
 

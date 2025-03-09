@@ -8,6 +8,7 @@ import hashlib
 from gogdl.dl.managers import dependencies
 from gogdl.dl.managers.task_executor import ExecutingManager
 from gogdl.dl.workers import task_executor
+from gogdl.languages import Language
 from gogdl import constants
 import os
 import logging
@@ -37,7 +38,7 @@ class Manager:
         self.build = generic_manager.target_build
         self.version_name = self.build["version_name"]
 
-        self.lang = self.arguments.lang or "en-US"
+        self.lang = Language.parse(self.arguments.lang or "en-US")
         self.dlcs_should_be_downloaded = self.arguments.dlcs
         if self.arguments.dlcs_list:
             self.dlcs_list = self.arguments.dlcs_list.split(",")
