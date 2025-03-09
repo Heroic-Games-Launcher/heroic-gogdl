@@ -12,6 +12,7 @@ from gogdl.dl.managers.dependencies import DependenciesManager
 from gogdl.dl.managers.task_executor import ExecutingManager
 from gogdl.dl.workers.task_executor import DownloadTask1, DownloadTask2, WriterTask
 from gogdl.dl.objects import v1
+from gogdl.languages import Language
 
 
 class Manager:
@@ -40,7 +41,7 @@ class Manager:
         self.build = generic_manager.target_build
         self.version_name = self.build["version_name"]
 
-        self.lang = self.arguments.lang or "English"
+        self.lang = Language.parse(self.arguments.lang or "English")
         self.dlcs_should_be_downloaded = self.arguments.dlcs
         if self.arguments.dlcs_list:
             self.dlcs_list = self.arguments.dlcs_list.split(",")
