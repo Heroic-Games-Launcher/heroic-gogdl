@@ -53,6 +53,7 @@ def launch(arguments, unknown_args):
     unified_platform = {"win32": "windows", "darwin": "osx", "linux": "linux"}
     command = list()
     working_dir = arguments.path
+    heroic_exe_wrapper = os.environ.get("HEROIC_GOGDL_WRAPPER_EXE")
     # If type is a string we know it's a path to start.sh on linux
     if type(info) != str:
         if sys.platform != "win32":
@@ -116,6 +117,10 @@ def launch(arguments, unknown_args):
         if len(wrapper) > 0 and wrapper[0] is not None:
             command.extend(wrapper)
 
+        if heroic_exe_wrapper:
+            exe_wrap = shlex.split(heroic_exe_wrapper.strip())
+            command.extend(exe_wrap)
+
         if arguments.override_exe:
             command.append(arguments.override_exe)
             working_dir = os.path.split(arguments.override_exe)[0]
@@ -127,6 +132,10 @@ def launch(arguments, unknown_args):
     else:
         if len(wrapper) > 0 and wrapper[0] is not None:
             command.extend(wrapper)
+
+        if heroic_exe_wrapper:
+            exe_wrap = shlex.split(heroic_exe_wrapper.strip())
+            command.extend(exe_wrap)
 
         if arguments.override_exe:
             command.append(arguments.override_exe)
