@@ -118,8 +118,7 @@ def launch(arguments, unknown_args):
             command.extend(wrapper)
 
         if heroic_exe_wrapper:
-            exe_wrap = shlex.split(heroic_exe_wrapper.strip())
-            command.extend(exe_wrap)
+            command.append(heroic_exe_wrapper.strip())
 
         if arguments.override_exe:
             command.append(arguments.override_exe)
@@ -134,8 +133,7 @@ def launch(arguments, unknown_args):
             command.extend(wrapper)
 
         if heroic_exe_wrapper:
-            exe_wrap = shlex.split(heroic_exe_wrapper.strip())
-            command.extend(exe_wrap)
+            command.append(heroic_exe_wrapper.strip())
 
         if arguments.override_exe:
             command.append(arguments.override_exe)
