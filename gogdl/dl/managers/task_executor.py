@@ -666,7 +666,7 @@ class ExecutingManager:
             if isinstance(task, generic.FileTask):
                 try:
                     task_dest = self.path
-                    old_destination = None
+                    old_destination = self.path 
                     if task.flags & generic.TaskFlag.SUPPORT:
                         task_dest = self.support
                     if task.old_flags & generic.TaskFlag.SUPPORT:
