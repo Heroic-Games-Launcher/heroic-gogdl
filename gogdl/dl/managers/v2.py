@@ -130,6 +130,7 @@ class Manager:
         if self.manifest:
             self.logger.debug("Requesting files of primary manifest")
             self.manifest.get_files()
+            self.manifest.exclude_files()
         if old_manifest:
             self.logger.debug("Requesting files of previous manifest")
             old_manifest.get_files()

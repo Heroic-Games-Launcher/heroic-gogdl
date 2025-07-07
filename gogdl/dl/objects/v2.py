@@ -134,6 +134,17 @@ class Manifest:
                 else:
                     self.dirs.append(DepotDirectory(item))
 
+    def exclude_files(self):
+        try:
+            with open(os.path.join(constants.CONFIG_DIR, "exclude", self.product_id), "r") as f:
+                exclude_list = [line.strip() for line in f if line.strip()]
+        except Exception:
+            return
+        self.files = [file for file in self.files if file.path not in exclude_list]
+
+                
+        
+
 class FileDiff:
     def __init__(self):
         self.file: DepotFile
