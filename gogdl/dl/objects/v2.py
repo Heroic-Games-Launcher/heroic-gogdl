@@ -145,7 +145,7 @@ class Manifest:
 
         def matches(file):
             for pattern in exclude_list:
-                if '/' in pattern: #If pattern contains a seperator, check dirname and basename seperately. Ensures that only files in specified directories are excluded.
+                if '/' in pattern and '/' in file.path: #If pattern contains a seperator, check dirname and basename seperately. Ensures that only files in specified directories are excluded.
                     if os.path.dirname(file.path) == os.path.dirname(pattern) and fnmatch(os.path.basename(file.path), os.path.basename(pattern)):
                         return True
                 else:
