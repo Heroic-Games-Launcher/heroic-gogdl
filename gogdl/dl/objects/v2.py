@@ -6,7 +6,6 @@ from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
 from gogdl import constants
 from gogdl.languages import Language
-from posixpath import dirname, basename
 
 
 class DepotFile:
@@ -140,13 +139,14 @@ class Manifest:
         try:
             with open(os.path.join(constants.CONFIG_DIR, "exclude", self.product_id), "r") as f:
                 exclude_list = [line.strip() for line in f if line.strip()]
+                exclude_list = [pattern.replace('/', os.sep) for pattern in exclude_list]
         except Exception:
             return
 
         def matches(file):
             for pattern in exclude_list:
                 if '/' in pattern: #If pattern contains a seperator, check dirname and basename seperately. Ensures that only files in specified directories are excluded.
-                    if dirname(file.path) == dirname(pattern) and fnmatch(basename(file.path), basename(pattern)):
+                    if os.path.dirname(file.path) == os.path.dirname(pattern) and fnmatch(os.path.basename(file.path), os.path.basename(pattern)):
                         return True
                 else:
                     if fnmatch(file.path, pattern):
