@@ -1,3 +1,4 @@
+from fnmatch import fnmatch
 import json
 import os
 
@@ -5,6 +6,7 @@ from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
 from gogdl import constants
 from gogdl.languages import Language
+from posixpath import dirname, basename
 
 
 class DepotFile:
@@ -140,10 +142,19 @@ class Manifest:
                 exclude_list = [line.strip() for line in f if line.strip()]
         except Exception:
             return
-        self.files = [file for file in self.files if file.path not in exclude_list]
 
-                
-        
+        def matches(file):
+            for pattern in exclude_list:
+                if '/' in pattern: #If pattern contains a seperator, check dirname and basename seperately. Ensures that only files in specified directories are excluded.
+                    if dirname(file.path) == dirname(pattern) and fnmatch(basename(file.path), basename(pattern)):
+                        return True
+                else:
+                    if fnmatch(file.path, pattern):
+                        return True
+            return False
+
+        self.files = [file for file in self.files if not matches(file)]
+
 
 class FileDiff:
     def __init__(self):
