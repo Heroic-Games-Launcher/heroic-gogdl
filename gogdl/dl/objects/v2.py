@@ -6,6 +6,7 @@ from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
 from gogdl import constants
 from gogdl.languages import Language
+from gogdl.dl.objects.generic import FileExlusion
 
 
 class DepotFile:
@@ -143,17 +144,7 @@ class Manifest:
         except Exception:
             return
 
-        def matches(file):
-            for pattern in exclude_list:
-                if '/' in pattern and '/' in file.path: #If pattern contains a seperator, check dirname and basename seperately. Ensures that only files in specified directories are excluded.
-                    if os.path.dirname(file.path) == os.path.dirname(pattern) and fnmatch(os.path.basename(file.path), os.path.basename(pattern)):
-                        return True
-                else:
-                    if fnmatch(file.path, pattern):
-                        return True
-            return False
-
-        self.files = [file for file in self.files if not matches(file)]
+        self.files = [file for file in self.files if not FileExlusion.matches(file, exclude_list)]
 
 
 class FileDiff:

@@ -4,6 +4,7 @@ from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v2
 from gogdl import constants
 from gogdl.languages import Language
+from gogdl.dl.objects.generic import FileExlusion
 
 
 class Depot:
@@ -128,6 +129,16 @@ class Manifest:
                     self.dirs.append(Directory(record)) 
                 else:
                     self.files.append(File(record, depot.game_ids[0]))
+
+    def exclude_files(self):
+        try:
+            with open(os.path.join(constants.CONFIG_DIR, "exclude", self.product_id), "r") as f:
+                exclude_list = [line.strip() for line in f if line.strip()]
+                #Only checks file list so we dont normalize the path seperator. Files objects use linux style paths, even on windows.
+        except Exception:
+            return
+
+        self.files = [file for file in self.files if not FileExlusion.matches(file, exclude_list)]
 
 class ManifestDiff(generic.BaseDiff):
     def __init__(self):
