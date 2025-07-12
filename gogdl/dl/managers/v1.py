@@ -164,8 +164,6 @@ class Manager:
 
         if self.manifest:
             self.manifest.get_files()
-            for file in self.manifest.files:
-                self.logger.info(file.path)
             self.manifest.exclude_files()
             
 
