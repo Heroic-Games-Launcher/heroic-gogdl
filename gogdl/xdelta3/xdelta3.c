@@ -99,7 +99,7 @@ static PyObject *patch(PyObject *self, PyObject *args) {
       continue;
     case XD3_OUTPUT:
       fwrite(stream.next_out, sizeof(uint8_t), stream.avail_out, ftarget);
-      //   put_progress(queue, stream.avail_out, 0);
+      put_progress(queue, stream.avail_out, 0);
       xd3_consume_output(&stream);
       goto process;
     case XD3_GETSRCBLK:
@@ -107,7 +107,7 @@ static PyObject *patch(PyObject *self, PyObject *args) {
       fseek(fsource, offset, SEEK_SET);
       src.onblk = fread(source_block, sizeof(uint8_t), WINDOW_SIZE, fsource);
       src.curblkno = src.getblkno;
-      //   put_progress(queue, 0, src.onblk);
+      put_progress(queue, 0, src.onblk);
       goto process;
     case XD3_GOTHEADER:
     case XD3_WINSTART:
