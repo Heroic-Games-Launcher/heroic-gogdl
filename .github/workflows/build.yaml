@@ -11,7 +11,6 @@ jobs:
   build:
     strategy:
       fail-fast: false
-      max-parallel: 3
       matrix:
         os: [ubuntu-24.04, ubuntu-24.04-arm, macos-13, macos-15, windows-2025]
     runs-on: ${{ matrix.os }}
