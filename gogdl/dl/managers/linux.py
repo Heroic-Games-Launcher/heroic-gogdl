@@ -14,6 +14,7 @@ from gogdl.dl.workers import linux as linux_worker
 from gogdl.dl.objects import linux
 from gogdl.languages import Language
 from gogdl import constants
+from gogdl.dl.objects.generic import FileExclusion
 
 
 def get_folder_name_from_windows_manifest(api_handler, id):
@@ -248,20 +249,26 @@ class Manager:
 
         diff = BaseDiff()
 
+        with open(os.path.join(constants.CONFIG_DIR, "exclude", self.game_id), "r") as f:
+            exclude_list = [line.strip().lower() for line in f if line.strip()]
+
         final_files = list()
         for i, file in enumerate(new):
             # Prepare file for download
-            # Calculate data offsets 
+            # Calculate data offsets
             handler = None
             for ins in self.installer_handlers:
                 if ins.product == file.product:
                     handler = ins
                     break
-
+                
             if not handler:
                 print("Orphan file found")
                 continue
-            
+
+            if FileExclusion.matches(file.file_name.lower().replace("data/noarch/", ""), exclude_list):
+                continue
+
             data_start = handler.start_of_archive_index + file.file_data_offset
             c_size = file.compressed_size
             size = file.uncompressed_size

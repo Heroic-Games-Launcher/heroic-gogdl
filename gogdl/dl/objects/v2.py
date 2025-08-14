@@ -6,7 +6,7 @@ from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
 from gogdl import constants
 from gogdl.languages import Language
-from gogdl.dl.objects.generic import FileExlusion
+from gogdl.dl.objects.generic import FileExclusion
 
 
 class DepotFile:
@@ -139,12 +139,12 @@ class Manifest:
     def exclude_files(self):
         try:
             with open(os.path.join(constants.CONFIG_DIR, "exclude", self.product_id), "r") as f:
-                exclude_list = [line.strip() for line in f if line.strip()]
+                exclude_list = [line.strip().lower() for line in f if line.strip()]
                 exclude_list = [pattern.replace('/', os.sep) for pattern in exclude_list]
         except Exception:
             return
 
-        self.files = [file for file in self.files if not FileExlusion.matches(file, exclude_list)]
+        self.files = [file for file in self.files if not FileExclusion.matches(file.path.lower(), exclude_list)]
 
 
 class FileDiff:

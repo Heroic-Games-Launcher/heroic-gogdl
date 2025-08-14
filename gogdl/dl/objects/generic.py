@@ -94,13 +94,13 @@ class FileTask:
 class TerminateWorker:
     pass
 
-class FileExlusion:
-    def matches(file, exclude_list):
-                for pattern in exclude_list:
-                    if '/' in pattern and '/' in file.path: #If pattern contains a seperator, check dirname and basename seperately. Ensures that only files in specified directories are excluded.
-                        if os.path.dirname(file.path) == os.path.dirname(pattern) and fnmatch(os.path.basename(file.path), os.path.basename(pattern)):
-                            return True
-                    else:
-                        if fnmatch(file.path, pattern):
-                            return True
-                return False
+class FileExclusion:
+    def matches(file, excludelist):
+        for pattern in excludelist:
+            if '/' in file and not pattern.endswith('*') and not pattern.startswith('*'):
+                if os.path.dirname(file) == os.path.dirname(pattern) and fnmatch(os.path.basename(file), os.path.basename(pattern)):
+                    return True
+            else:
+                if fnmatch(file,pattern):
+                    return True
+        return False
