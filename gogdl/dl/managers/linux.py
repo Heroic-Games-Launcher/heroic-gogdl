@@ -251,6 +251,7 @@ class Manager:
 
         with open(os.path.join(constants.CONFIG_DIR, "exclude", self.game_id), "r") as f:
             exclude_list = [line.strip().lower() for line in f if line.strip()]
+            exclude_list = [pattern.replace('/', os.sep).replace('\\', os.sep) for pattern in exclude_list]
 
         final_files = list()
         for i, file in enumerate(new):

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Flag, auto
-from fnmatch import fnmatch
+from pathlib import PurePath
 import os
 from typing import Optional
 
@@ -97,10 +97,6 @@ class TerminateWorker:
 class FileExclusion:
     def matches(file, excludelist):
         for pattern in excludelist:
-            if '/' in file and not pattern.endswith('*') and not pattern.startswith('*'):
-                if os.path.dirname(file) == os.path.dirname(pattern) and fnmatch(os.path.basename(file), os.path.basename(pattern)):
-                    return True
-            else:
-                if fnmatch(file,pattern):
-                    return True
+            if PurePath(file).full_match(pattern):
+                return True
         return False

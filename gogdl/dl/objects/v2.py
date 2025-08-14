@@ -140,11 +140,11 @@ class Manifest:
         try:
             with open(os.path.join(constants.CONFIG_DIR, "exclude", self.product_id), "r") as f:
                 exclude_list = [line.strip().lower() for line in f if line.strip()]
-                exclude_list = [pattern.replace('/', os.sep) for pattern in exclude_list]
+                exclude_list = [pattern.replace('/', os.sep).replace('\\', os.sep) for pattern in exclude_list]
         except Exception:
             return
 
-        self.files = [file for file in self.files if not FileExclusion.matches(file.path.lower(), exclude_list)]
+        self.files = [file for file in self.files if not FileExclusion.matches(file.path.lower().replace('/', os.sep).replace('\\', os.sep), exclude_list)]
 
 
 class FileDiff:
