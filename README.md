@@ -23,10 +23,13 @@ Heroic uses `$XDG_CONFIG_HOME/heroic/gog_store/auth.json`
 
 Here is the command to pull the source code
 
-```
+```bash
 git clone https://github.com/Heroic-Games-Launcher/heroic-gogdl
 cd heroic-gogdl
-./bin/gogdl --help
+python -m venv venv
+. venv/bin/activate
+pip install .
+gogdl --help
 ```
 
 If you have any questions ask on our [Discord](https://discord.com/invite/rHJ2uqdquK) or through GitHub issue
@@ -37,13 +40,14 @@ If you wish to test the gogdl in Heroic flatpak you likely need to build `gogdl`
 
 - Get pyinstaller
 
-```
+```bash
 pip install pyinstaller
 ```
 
 - Build the binary (assuming you are in heroic-gogdl direcory)
 
-```
+```bash
+pip install -e . # Ensure you build the C code to python module
 pyinstaller --onefile --name gogdl gogdl/cli.py
 ```
 

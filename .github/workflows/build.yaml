@@ -25,6 +25,9 @@ jobs:
       - name: Install pyinstaller and dependencies
         run: pip3 install --upgrade pyinstaller requests
 
+      - name: Build C module
+        run: pip3 install -e . 
+
       - name: Set strip on Linux and Mac
         id: strip
         run: echo "option=--strip" >> $GITHUB_OUTPUT
