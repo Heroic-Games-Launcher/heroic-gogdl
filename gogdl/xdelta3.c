@@ -1,8 +1,8 @@
-#include <xdelta3/xdelta3.h>
+#include <Python.h>
 #ifdef _LARGEFILE_SOURCE
 #undef _LARGEFILE_SOURCE
 #endif
-#include <Python.h>
+#include <xdelta3/xdelta3.h>
 
 #define WINDOW_SIZE 1 << 20
 
@@ -102,13 +102,14 @@ static PyObject *patch(PyObject *self, PyObject *args) {
       put_progress(queue, stream.avail_out, 0);
       xd3_consume_output(&stream);
       goto process;
-    case XD3_GETSRCBLK:
+    case XD3_GETSRCBLK: {
       usize_t offset = src.blksize * src.getblkno;
       fseek(fsource, offset, SEEK_SET);
       src.onblk = fread(source_block, sizeof(uint8_t), WINDOW_SIZE, fsource);
       src.curblkno = src.getblkno;
       put_progress(queue, 0, src.onblk);
       goto process;
+    }
     case XD3_GOTHEADER:
     case XD3_WINSTART:
     case XD3_WINFINISH:
