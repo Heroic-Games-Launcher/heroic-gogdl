@@ -7,8 +7,11 @@
 #define WINDOW_SIZE 1 << 20
 
 void put_progress(PyObject *queue, usize_t written, usize_t read) {
-  PyObject *progress_tuple;
-  PyObject *put_result;
+  PyObject *progress_tuple = NULL;
+  PyObject *put_result = NULL;
+
+  PyObject *written_obj = NULL;
+  PyObject *read_obj = NULL;
 
   PyObject *put_method = PyObject_GetAttrString(queue, "put");
   if (!put_method || !PyCallable_Check(put_method)) {
@@ -17,17 +20,32 @@ void put_progress(PyObject *queue, usize_t written, usize_t read) {
     return;
   }
 
-  progress_tuple = PyTuple_New(2);
-  if (!progress_tuple)
-    return;
+  read_obj = PyLong_FromLong(read);
+  written_obj = PyLong_FromLong(written);
 
-  PyTuple_SetItem(progress_tuple, 0, PyLong_FromLong(written));
-  PyTuple_SetItem(progress_tuple, 1, PyLong_FromLong(read));
+  if (!written_obj || !read_obj) {
+    Py_XDECREF(written_obj);
+    Py_XDECREF(read_obj);
+    Py_DECREF(put_method);
+    return;
+  }
+
+  progress_tuple = PyTuple_New(2);
+  if (!progress_tuple) {
+    Py_DECREF(written_obj);
+    Py_DECREF(read_obj);
+    Py_DECREF(put_method);
+    return;
+  }
+
+  PyTuple_SetItem(progress_tuple, 0, written_obj);
+  PyTuple_SetItem(progress_tuple, 1, read_obj);
+
   put_result = PyObject_CallFunctionObjArgs(put_method, progress_tuple, NULL);
 
   Py_DECREF(put_method);
   Py_DECREF(progress_tuple);
-  Py_XDECREF(put_result);
+  Py_DECREF(put_result);
 }
 
 static PyObject *patch(PyObject *self, PyObject *args) {
