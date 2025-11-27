@@ -47,7 +47,7 @@ include = ["gogdl*"]
 
 [tool.setuptools]
 ext-modules = [
-  {name = "gogdl.xdelta3", sources = ["gogdl/xdelta3.c", "xdelta3/xdelta3/xdelta3.c"], include-dirs = ["xdelta3"], extra-compile-args = ["-DSIZEOF_SIZE_T=8", "-DSIZEOF_UNSIGNED_INT=8", "-DSIZEOF_UNSIGNED_LONG=8", "-DSIZEOF_UNSIGNED_LONG_LONG=8", "-DXD3_USE_LARGEFILE64=1", "-DXD3_ENCODER=0", "-DSECONDARY_DJW=0", "-DSECONDARY_LZMA=0", "-DSHELL_TESTS=0"]}
+  {name = "gogdl.xdelta3", sources = ["gogdl/xdelta3.c", "xdelta3/xdelta3/xdelta3.c"], include-dirs = ["xdelta3"], extra-compile-args = ["-DSIZEOF_SIZE_T=8", "-DSIZEOF_UNSIGNED_INT=4", "-DSIZEOF_UNSIGNED_LONG=8", "-DSIZEOF_UNSIGNED_LONG_LONG=8", "-DXD3_USE_LARGEFILE64=1", "-DXD3_ENCODER=0", "-DSECONDARY_DJW=0", "-DSECONDARY_LZMA=0", "-DSHELL_TESTS=0"]}
 ]
 
 [tool.setuptools.dynamic]
