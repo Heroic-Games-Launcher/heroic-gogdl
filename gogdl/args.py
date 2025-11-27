@@ -17,7 +17,7 @@ def init_parser():
     )
 
     parser.add_argument("--auth-config-path", dest="auth_config_path",
-                        help="Path to json file where tokens will be stored", required=True)
+                        help="Path to json file where tokens will be stored", required=False)
 
     subparsers = parser.add_subparsers(dest="command")
 
