@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import requests
+import urllib.parse
 import hashlib
 import datetime
 import gzip
@@ -250,8 +251,9 @@ class CloudStorageManager:
 
     def delete_file(self, file: SyncFile):
         self.logger.info(f"Deleting {file.relative_path}")
+        fpath = urllib.parse.quote(file.relative_path)
         response = self.session.delete(
-            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{file.relative_path}",
+            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{fpath}",
         )
 
     def upload_file(self, file: SyncFile):
@@ -264,8 +266,9 @@ class CloudStorageManager:
             "Content-Encoding": "gzip",
         }
 
+        fpath = urllib.parse.quote(file.relative_path)
         response = self.session.put(
-            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{file.relative_path}",
+            f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{fpath}",
             data=compressed_data,
             headers=headers,
         )
@@ -278,8 +281,9 @@ class CloudStorageManager:
 
     def download_file(self, file: SyncFile, retries=3):
         try:
+            fpath = urllib.parse.quote(file.relative_path)
             response = self.session.get(
-                f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{file.relative_path}",
+                f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{fpath}",
                 stream=True,
             )
         except:
