@@ -20,11 +20,11 @@ class Manager:
         self.arguments = generic_manager.arguments
         self.unknown_arguments = generic_manager.unknown_arguments
         if "path" in self.arguments:
-            self.path = self.arguments.path
+            self.path = self.arguments.path or ""
         else:
             self.path = ""
         if "support_path" in self.arguments:
-            self.support = self.arguments.support_path
+            self.support = self.arguments.support_path or ""
         else:
             self.support = ""
 
