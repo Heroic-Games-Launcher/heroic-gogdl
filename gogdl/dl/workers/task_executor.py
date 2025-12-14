@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from multiprocessing import Process, Queue
 from gogdl.dl.objects.generic import MemorySegment, TaskFlag, TerminateWorker
-from gogdl.xdelta import patcher
+import gogdl.xdelta3
 
 
 class FailReason(Enum):
@@ -357,8 +357,7 @@ class Writer(Process):
                     patch = os.path.join(task.destination, task.patch_file)
                     patch = dl_utils.get_case_insensitive_name(patch)
                     target = task_path
-
-                    patcher.patch(source, patch, target, self.speed_queue)
+                    gogdl.xdelta3.patch(source, patch, target, self.speed_queue)
 
                 except Exception as e:
                     print("Patch failed", e)
