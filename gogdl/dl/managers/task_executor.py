@@ -535,7 +535,8 @@ class ExecutingManager:
     def shutdown(self):
         self.logger.debug("Stopping progressbar")
         self.progress.completed = True
-        self.progress.join()
+        if self.progress.is_alive():
+            self.progress.join()
         
         # Clear speed queues
         for q in [self.download_speed_updates, self.writer_speed_updates]:
