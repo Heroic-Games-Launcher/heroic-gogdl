@@ -37,6 +37,7 @@ jobs:
       - name: Build
         run: pyinstaller
           --onefile
+          --debug all
           --name gogdl
           ${{ steps.strip.outputs.option }}
           gogdl/cli.py
