@@ -36,7 +36,7 @@ jobs:
 
       - name: Build
         run: pyinstaller
-          --onefile
+          --onedir
           --debug all
           --name gogdl
           ${{ steps.strip.outputs.option }}
