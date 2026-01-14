@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Flag, auto
-from fnmatch import fnmatch
+from pathlib import PurePath
 import os
 
 
