@@ -3,16 +3,21 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: write
 
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15, windows-2025]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15, windows-2025, windows-11-arm]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -43,7 +48,27 @@ jobs:
         env:
           PYTHONOPTIMIZE: 1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: gogdl-${{ matrix.os }}
           path: dist/*
+
+  draft:
+    needs: build
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    
+    steps: 
+      - uses: actions/download-artifact@v7
+      - run: mkdir -p release
+      - run: |
+          mv gogdl-ubuntu-24.04/gogdl release/gogdl_linux_x86_64
+          mv gogdl-ubuntu-24.04-arm/gogdl release/gogdl_linux_arm64
+          mv gogdl-macos-15-intel/gogdl release/gogdl_macos_x86_64
+          mv gogdl-macos-15/gogdl release/gogdl_macos_arm64
+          mv gogdl-windows-2025/gogdl.exe release/gogdl_windows_x86_64.exe 
+          mv gogdl-windows-11-arm/gogdl.exe release/gogdl_windows_arm64.exe 
+
+      - uses: softprops/action-gh-release@v2
+        with: 
+          files: release/gogdl*
