@@ -105,17 +105,21 @@ class Manifest:
 
         for depot in self.all_depots:
             for product_id in depot.game_ids:
-                if not product_id in data:
+                if product_id not in data:
                     data[product_id] = dict()
                 product_data = data[product_id]
+                
                 for lang in depot.languages:
-                    if lang == "Neutral":
-                        lang = "*"
-                    if not lang in product_data:
-                        product_data[lang] = {"download_size": 0, "disk_size": 0}
+                    # Normalize language code
+                    lang_code = "*" if lang == "Neutral" else lang
+                    parsed_lang = Language.parse(lang_code)
+                    lang_key = parsed_lang.code if parsed_lang else lang_code
                     
-                    product_data[lang]["download_size"] += depot.size
-                    product_data[lang]["disk_size"] += depot.size
+                    if lang_key not in product_data:
+                        product_data[lang_key] = {"download_size": 0, "disk_size": 0}
+                    
+                    product_data[lang_key]["download_size"] += depot.size
+                    product_data[lang_key]["disk_size"] += depot.size
         
         return data 
 

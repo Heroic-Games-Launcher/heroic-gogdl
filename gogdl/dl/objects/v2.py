@@ -107,16 +107,21 @@ class Manifest:
         data = dict()
 
         for depot in self.all_depots:
-            if not depot.product_id in data:
+            if depot.product_id not in data:
                 data[depot.product_id] = dict()
                 data[depot.product_id]['*'] = {"download_size": 0, "disk_size": 0}
             product_data = data[depot.product_id]
+            
             for lang in depot.languages:
-                if not lang in product_data:
-                    product_data[lang] = {"download_size":0, "disk_size":0} 
+                # Map to standard language code
+                parsed_lang = Language.parse(lang)
+                lang_key = parsed_lang.code if parsed_lang else lang
                 
-                product_data[lang]["download_size"] += depot.compressed_size
-                product_data[lang]["disk_size"] += depot.size
+                if lang_key not in product_data:
+                    product_data[lang_key] = {"download_size": 0, "disk_size": 0}
+                
+                product_data[lang_key]["download_size"] += depot.compressed_size
+                product_data[lang_key]["disk_size"] += depot.size
 
         return data 
 

@@ -29,6 +29,8 @@ class Language:
 
     @staticmethod
     def parse(val: str):
+        if val == '*':
+            return None
         for lang in LANGUAGES:
             if lang == val:
                 return lang
