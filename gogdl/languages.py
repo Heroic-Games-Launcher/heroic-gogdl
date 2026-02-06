@@ -42,7 +42,7 @@ LANGUAGES = [
     Language("ar", "Arabic", "العربية", []),
     Language("az-AZ", "Azeri", "Azərbaycan­ılı", []),
     Language("be-BY", "Belarusian", "Беларускі", ["be"]),
-    Language("bn-BD", "Bengali", "বাংলা", ["bn_BD"]),
+    Language("bn-BD", "Bengali", "বাং", ["bn_BD"]),
     Language("bg-BG", "Bulgarian", "български", ["bg", "bl"]),
     Language("bs-BA", "Bosnian", "босански", []),
     Language("ca-ES", "Catalan", "Català", ["ca"]),
