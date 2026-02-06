@@ -1,3 +1,6 @@
+#ifndef Py_LIMITED_API
+#error "Py_LIMITED_API must be defined! We rely on it to ensure we attempt to use stable 3.x ABI"
+#endif
 #include <Python.h>
 #ifdef _LARGEFILE_SOURCE
 #undef _LARGEFILE_SOURCE
