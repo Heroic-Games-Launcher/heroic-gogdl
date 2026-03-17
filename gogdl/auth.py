@@ -2,12 +2,15 @@
 # with ability to have multiple tokens (will come in handy in the future)
 import json
 import logging
+import netrc
 import os.path
 import requests
 import time
+from urllib.parse import urlparse
 from gogdl import version
+from gogdl.constants import GOG_AUTH
 
-CODE_URL = "https://auth.gog.com/token?client_id=46899977096215655&client_secret=9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fembed.gog.com%2Fon_login_success%3Forigin%3Dclient&code="
+CODE_URL = f"{GOG_AUTH}/token?client_id=46899977096215655&client_secret=9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fembed.gog.com%2Fon_login_success%3Forigin%3Dclient&code="
 CLIENT_ID = "46899977096215655"
 CLIENT_SECRET = "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9"
 
@@ -24,6 +27,23 @@ class AuthorizationManager:
         self.session.headers.update(
             {"User-Agent": f"gogdl/{version} (Heroic Games Launcher)"}
         )
+
+        self.__check_netrc()
+
+    def __check_netrc(self):
+        try:
+            netrc_db = netrc.netrc()
+            creds = netrc_db.authenticators(urlparse(GOG_AUTH).hostname)
+            if creds:
+                self.logger.warning(
+                    "~/.netrc contains credentials that match auth.gog.com (login: %s). "
+                    "This would cause requests to send HTTP Basic Auth headers to GOG's token "
+                    "endpoint, resulting in an 'invalid_client' error. "
+                    "These credentials are being ignored.",
+                    creds[0],
+                )
+        except (FileNotFoundError, netrc.NetrcParseError):
+            pass
 
     def __read_config(self):
         if os.path.exists(self.config_path):
