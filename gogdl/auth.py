@@ -24,6 +24,7 @@ class AuthorizationManager:
         self.session.headers.update(
             {"User-Agent": f"gogdl/{version} (Heroic Games Launcher)"}
         )
+        self.session.auth = lambda r: r
 
     def __read_config(self):
         if os.path.exists(self.config_path):
