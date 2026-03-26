@@ -268,7 +268,7 @@ static PyMethodDef methods[] = {
     {"patch", patch, METH_VARARGS, "Runs a patch on provided files"},
     {NULL, NULL, 0, NULL}};
 
-static struct PyModuleDef xdelta_def = {PyModuleDef_HEAD_INIT, "xdelta3", NULL,
+static struct PyModuleDef xdelta_def = {PyModuleDef_HEAD_INIT, "gogdl_xdelta3", NULL,
                                         -1, methods};
 
-PyMODINIT_FUNC PyInit_xdelta3(void) { return PyModule_Create(&xdelta_def); }
+PyMODINIT_FUNC PyInit_gogdl_xdelta3(void) { return PyModule_Create(&xdelta_def); }
