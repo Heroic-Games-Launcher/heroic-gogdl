@@ -21,7 +21,8 @@ if zipfile.is_zipfile(os.path.dirname(__file__)):
                 crc = zlib.crc32(f.read())
                 should_extract = xdelta.CRC != crc
         if should_extract:
-            zf.extract(xdelta, vendored_packages_path)
+            extracted = zf.extract(xdelta, vendored_packages_path)
+            extracted = os.chmod(extracted, xdelta.external_attr >> 16)
 
     sys.path.insert(0, vendored_packages_path)
 
