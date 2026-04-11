@@ -27,7 +27,7 @@ class AuthorizationManager:
         self.session.auth = lambda r: r
 
     def __read_config(self):
-        if os.path.exists(self.config_path):
+        if self.config_path and os.path.exists(self.config_path):
             with open(self.config_path, "r") as f:
                 self.credentials_data = json.loads(f.read())
                 f.close()

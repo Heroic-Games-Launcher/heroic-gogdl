@@ -22,6 +22,9 @@ def get_folder_name_from_windows_manifest(api_handler, id):
         f"{constants.GOG_CONTENT_SYSTEM}/products/{id}/os/windows/builds?generation=2",
     )
 
+    if not builds.get("items"):
+        return "UnknownGame"
+
     url = builds["items"][0]["link"]
     meta, headers = dl_utils.get_zlib_encoded(api_handler, url)
     install_dir = (
@@ -62,7 +65,7 @@ class Manager:
         self.logger.info("Initialized Linux Download Manager")
 
         self.game_data = None
-
+        self.game_installer = {"version": "Unknown"}
         self.languages_codes = list()
         self.downlink = None
         self.game_files = list()
@@ -89,6 +92,11 @@ class Manager:
 
     def setup(self):
         self.game_data = self.api_handler.get_item_data(self.game_id, expanded=['downloads', 'expanded_dlcs'])
+
+        if not self.game_data: # Adicionado este bloco de proteção
+            self.logger.error("Could not fetch game data. Check your connection or auth.")
+            self.game_data = {"downloads": {"installers": []}, "expanded_dlcs": []}
+            return
 
         # Filter linux installers
         game_installers = self.filter_linux_installers(self.game_data["downloads"]["installers"])
