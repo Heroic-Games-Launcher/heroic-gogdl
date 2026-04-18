@@ -221,6 +221,7 @@ class CloudStorageManager:
         json_res = response.json()
         # print(json_res)
         self.logger.info(f"Files in cloud: {len(json_res)}")
+        self.logger.debug(f"Files: {json_res}")
 
         filtered = filter(self.is_in_our_dir, json_res)
 
@@ -255,6 +256,7 @@ class CloudStorageManager:
         response = self.session.delete(
             f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{fpath}",
         )
+        self.logger.debug(f"Delete response: {response}")
 
     def upload_file(self, file: SyncFile):
         compressed_data = gzip.compress(
@@ -296,6 +298,8 @@ class CloudStorageManager:
 
         if not response.ok:
             self.logger.error("Downloading file failed")
+            self.logger.debug(f"Download error: {response}")
+            return
 
         total = response.headers.get("Content-Length")
         os.makedirs(os.path.split(file.absolute_path)[0], exist_ok=True)
@@ -325,6 +329,7 @@ class CloudStorageManager:
         response = self.session.post(f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}")
         if not response.ok:
             self.logger.error("Failed to commit")
+            self.logger.debug(f"Commit error: {response}")
 
 
 class SyncClassifier:

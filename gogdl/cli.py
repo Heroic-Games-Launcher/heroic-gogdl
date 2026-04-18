@@ -29,6 +29,7 @@ def main():
     if '-d' in unknown_args or '--debug' in unknown_args:
         level = logging.DEBUG
     logging.basicConfig(format="[%(name)s] %(levelname)s: %(message)s", level=level)
+    logging.getLogger("urllib3").setLevel(level)
     logger = logging.getLogger("MAIN")
     logger.debug(arguments)
     if arguments.display_version:
