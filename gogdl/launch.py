@@ -39,6 +39,20 @@ def get_flatpak_command(id: str) -> list[str]:
         pass
     return []
 
+def get_app_bundle_command(id: str) -> list[str]:
+    if sys.platform != "darwin":
+        return []
+    try:
+        p = subprocess.run(["mdfind", "kMDItemCFBundleIdentifier==", id], stdout=subprocess.PIPE, stderr=None)
+        if len(p.stdout) > 0:
+            bundle = p.stdout.split(b"\n")[0].decode("utf-8")
+            p = subprocess.run(["defaults", "read", bundle + "/Contents/Info.plist", "CFBundleExecutable"], stdout=subprocess.PIPE, stderr=None)
+            if len(p.stdout) > 0:
+                bin = p.stdout.split(b"\n")[0].decode("utf-8")
+                return [bundle + "/Contents/MacOS/" + bin]
+    except FileNotFoundError:
+        pass
+    return []
 
 # Supports launching linux builds
 def launch(arguments, unknown_args):
@@ -95,21 +109,28 @@ def launch(arguments, unknown_args):
         if sys.platform != "win32" and arguments.platform == 'windows' and not arguments.override_exe:
             if "scummvm.exe" in executable.lower():
                 flatpak_scummvm = get_flatpak_command("org.scummvm.ScummVM")
+                bundle_scummvm = get_app_bundle_command("org.scummvm.app")
                 native_scummvm = shutil.which("scummvm")
                 if native_scummvm:
                     native_scummvm = [native_scummvm]
             
-                native_runner = flatpak_scummvm or native_scummvm
+                native_runner = flatpak_scummvm or bundle_scummvm or native_scummvm
                 if native_runner:
                     wrapper = native_runner
                     executable = None
             elif "dosbox.exe" in executable.lower():
                 flatpak_dosbox = get_flatpak_command("io.github.dosbox-staging")
-                native_dosbox= shutil.which("dosbox")
-                if native_dosbox:
-                    native_dosbox = [native_dosbox]
-                
-                native_runner = flatpak_dosbox or native_dosbox
+                bundle_dosbox = get_app_bundle_command("io.github.dosbox-staging")
+                for candidate in ["dosbox-staging", "dosbox"]:
+                    # Most distributions prefer "dosbox" for DOSBox Staging's
+                    #  binary and let different DOSBox variants conflict, but
+                    #  Homebrew in particular uses "dosbox-staging". As the
+                    #  latter is more specific we try that first.
+                    native_dosbox= shutil.which(candidate)
+                    if native_dosbox:
+                        native_dosbox = [native_dosbox]
+                        break
+                native_runner = flatpak_dosbox or bundle_dosbox or native_dosbox
                 if native_runner:
                     wrapper = native_runner
                     executable = None
