@@ -5,6 +5,7 @@ import logging
 import os.path
 import requests
 import time
+from gogdl import net
 from gogdl import version
 
 CODE_URL = "https://auth.gog.com/token?client_id=46899977096215655&client_secret=9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fembed.gog.com%2Fon_login_success%3Forigin%3Dclient&code="
@@ -14,7 +15,7 @@ CLIENT_SECRET = "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d
 
 class AuthorizationManager:
     def __init__(self, config_path):
-        self.session = requests.session()
+        self.session = net.Session()
         self.logger = logging.getLogger("AUTH")
 
         self.config_path = config_path
@@ -120,7 +121,12 @@ class AuthorizationManager:
         self.logger.debug("Handling cli")
 
         if arguments.authorization_code:
-            response = self.session.get(CODE_URL + arguments.authorization_code)
+            try:
+                response = self.session.get(CODE_URL + arguments.authorization_code)
+            except (requests.ConnectionError, requests.Timeout) as e:
+                self.logger.error(f"Failed to reach GOG authentication server: {e}")
+                print(json.dumps({"error": True}))
+                return
 
             if not response.ok:
                 print(json.dumps({"error": True}))
