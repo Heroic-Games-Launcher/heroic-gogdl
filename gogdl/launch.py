@@ -1,3 +1,4 @@
+import configparser
 import os
 import json
 import sys
@@ -103,6 +104,22 @@ def launch(arguments, unknown_args):
                 if native_runner:
                     wrapper = native_runner
                     executable = None
+                    # ScummVM games require a "path" option to be set in their configuration file (pointing to the
+                    # game installation dir). This path is usually set by ScriptInterpreter, but since SI is a Windows
+                    # application, this path will be wrong. Open the config file and update the path
+                    config_file = next((
+                        arg
+                        for i, arg in enumerate(launch_arguments)
+                        if launch_arguments[i-1] == '-c'
+                    ), None)
+                    config_section = launch_arguments[-1]
+                    if config_file and config_section:
+                        full_config_file = os.path.join(working_dir, config_file)
+                        config = configparser.ConfigParser()
+                        config.read(full_config_file)
+                        config.set(config_section, 'path', arguments.path)
+                        with open(full_config_file, 'w') as f:
+                            config.write(f)
             elif "dosbox.exe" in executable.lower():
                 flatpak_dosbox = get_flatpak_command("io.github.dosbox-staging")
                 native_dosbox= shutil.which("dosbox")
