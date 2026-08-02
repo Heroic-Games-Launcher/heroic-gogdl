@@ -169,8 +169,8 @@ class Download(Process):
                     self.results_queue.put(DownloadTaskResult(False, FailReason.UNAUTHORIZED, task))
                     print("Connection failed, unauthorized")
                     return
-                elif response and response.status_code > 403: 
-                    preferred_endpoint+=1
+                elif response and (response.status_code > 403 or response.status_code == 200): 
+                    preferred_endpoint += 1
                     url = self._get_download_url_v2(task, urls, preferred_endpoint)
                 retries -= 1
                 time.sleep(2)
