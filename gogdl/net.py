@@ -1,5 +1,5 @@
-# requests has no timeout by default. Matters when ipv6 is advertised but not
-# routed: the connect stalls and we only get to the ipv4 address once it times out
+# Add request timeouts. Matters when ipv6 is given by ISP but not routed
+# python will automatically fallback to ipv4 when the ipv6 request timeouts
 import requests
 
 # connect, read
