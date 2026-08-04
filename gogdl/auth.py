@@ -124,7 +124,9 @@ class AuthorizationManager:
             try:
                 response = self.session.get(CODE_URL + arguments.authorization_code)
             except (requests.ConnectionError, requests.Timeout) as e:
-                self.logger.error(f"Failed to reach GOG authentication server: {e}")
+                # Don't log the exception itself, it embeds the request url
+                # and that carries the client secret and the auth code
+                self.logger.error(f"Failed to reach GOG ({type(e).__name__})")
                 print(json.dumps({"error": True}))
                 return
 
