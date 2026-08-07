@@ -27,6 +27,7 @@ class FailReason(Enum):
     UNAUTHORIZED = auto()
 
     MISSING_CHUNK = auto()
+    INCOMPLETE_READ = auto()
 
 
 @dataclass
@@ -143,10 +144,7 @@ class Download(Process):
         preferred_endpoint = 0
         url = self._get_download_url_v2(task, urls, preferred_endpoint)
 
-        buffer = bytes()
-        compressed_sum = hashlib.md5()
-        download_size = 0
-        response = None
+        fail_reason = None
         while retries > 0:
             response = None
             buffer = bytes()
@@ -154,7 +152,7 @@ class Download(Process):
             download_size = 0
             decompressor = zlib.decompressobj()
             try:
-                response = self.session.get(url, stream=True, timeout=10)
+                response = self.session.get(url, stream=True, timeout=(5, 15))
                 response.raise_for_status()
                 for chunk in response.iter_content(1024 * 512):
                     download_size += len(chunk)
@@ -162,22 +160,30 @@ class Download(Process):
                     decompressed = decompressor.decompress(chunk)
                     buffer += decompressed
                     self.speed_queue.put((len(chunk), len(decompressed)))
-
-            except Exception as e:
+            except (requests.exceptions.HTTPError, requests.exceptions.ConnectTimeout)  as e:
                 print("Connection failed", e)
                 if response and response.status_code in [401, 403]:
                     self.results_queue.put(DownloadTaskResult(False, FailReason.UNAUTHORIZED, task))
                     print("Connection failed, unauthorized")
                     return
-                elif response and response.status_code > 403: 
-                    preferred_endpoint+=1
-                    url = self._get_download_url_v2(task, urls, preferred_endpoint)
-                retries -= 1
+                else:
+                    fail_reason = FailReason.CONNECTION
+            except requests.exceptions.RequestException as e:
+                print("Connection failed", e)
+                fail_reason = FailReason.INCOMPLETE_READ
+            except Exception as e:
+                print("Connection failed", e)
+                fail_reason = FailReason.UNKNOWN
+            else:
+                break
+            preferred_endpoint += 1
+            if preferred_endpoint >= len(urls):
+                preferred_endpoint = 0
                 time.sleep(2)
-                continue
-            break
+            url = self._get_download_url_v2(task, urls, preferred_endpoint)
+            retries -= 1
         else:
-            self.results_queue.put(DownloadTaskResult(False, FailReason.CHECKSUM, task))
+            self.results_queue.put(DownloadTaskResult(False, fail_reason, task))
             return
 
         decompressed_size = 0
