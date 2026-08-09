@@ -27,6 +27,7 @@ class FailReason(Enum):
     UNAUTHORIZED = auto()
 
     MISSING_CHUNK = auto()
+    INCOMPLETE_READ = auto()
 
 
 @dataclass
@@ -110,33 +111,48 @@ class Download(Process):
         self.session.close()
         self.shared_memory.close()
 
+    def _get_download_url_v2(self, task, urls, index):
+        if len(urls) <= index:
+            index = len(urls) - 1
+        endpoint = copy(urls[index])
+        if task.product_id != 'redist':
+            endpoint["parameters"]["path"] += f"/{dl_utils.galaxy_path(task.compressed_sum)}"
+            url = dl_utils.merge_url_with_params(
+                endpoint["url_format"], endpoint["parameters"]
+            )
+        else:
+            endpoint["url"] += "/" + dl_utils.galaxy_path(task.compressed_sum)
+            url = endpoint["url"]
+        return url
+
+    def _get_download_url_v1(self, urls):
+        if type(urls) == str:
+            url = urls
+        else:
+            endpoint = copy(urls[0])
+            endpoint["parameters"]["path"] += "/main.bin"
+            url = dl_utils.merge_url_with_params(
+                endpoint["url_format"], endpoint["parameters"]
+            )
+        return url
+    
     def v2(self, task: DownloadTask2):
         retries = 5 
         urls = self.secure_links[task.product_id]
 
         compressed_md5 = task.compressed_sum
+        preferred_endpoint = 0
+        url = self._get_download_url_v2(task, urls, preferred_endpoint)
 
-        endpoint = copy(urls[0])
-        if task.product_id != 'redist':
-            endpoint["parameters"]["path"] += f"/{dl_utils.galaxy_path(compressed_md5)}"
-            url = dl_utils.merge_url_with_params(
-                endpoint["url_format"], endpoint["parameters"]
-            )
-        else:
-            endpoint["url"] += "/" + dl_utils.galaxy_path(compressed_md5)
-            url = endpoint["url"]
-
-        buffer = bytes()
-        compressed_sum = hashlib.md5()
-        download_size = 0
-        response = None
+        fail_reason = None
         while retries > 0:
+            response = None
             buffer = bytes()
             compressed_sum = hashlib.md5()
             download_size = 0
             decompressor = zlib.decompressobj()
             try:
-                response = self.session.get(url, stream=True, timeout=10)
+                response = self.session.get(url, stream=True, timeout=(5, 15))
                 response.raise_for_status()
                 for chunk in response.iter_content(1024 * 512):
                     download_size += len(chunk)
@@ -144,19 +160,30 @@ class Download(Process):
                     decompressed = decompressor.decompress(chunk)
                     buffer += decompressed
                     self.speed_queue.put((len(chunk), len(decompressed)))
-
-            except Exception as e:
+            except (requests.exceptions.HTTPError, requests.exceptions.ConnectTimeout)  as e:
                 print("Connection failed", e)
-                if response and response.status_code == 401:
+                if response and response.status_code in [401, 403]:
                     self.results_queue.put(DownloadTaskResult(False, FailReason.UNAUTHORIZED, task))
                     print("Connection failed, unauthorized")
                     return
-                retries -= 1
+                else:
+                    fail_reason = FailReason.CONNECTION
+            except requests.exceptions.RequestException as e:
+                print("Connection failed", e)
+                fail_reason = FailReason.INCOMPLETE_READ
+            except Exception as e:
+                print("Connection failed", e)
+                fail_reason = FailReason.UNKNOWN
+            else:
+                break
+            preferred_endpoint += 1
+            if preferred_endpoint >= len(urls):
+                preferred_endpoint = 0
                 time.sleep(2)
-                continue
-            break
+            url = self._get_download_url_v2(task, urls, preferred_endpoint)
+            retries -= 1
         else:
-            self.results_queue.put(DownloadTaskResult(False, FailReason.CHECKSUM, task))
+            self.results_queue.put(DownloadTaskResult(False, fail_reason, task))
             return
 
         decompressed_size = 0
@@ -180,18 +207,12 @@ class Download(Process):
         urls = self.secure_links[task.product_id]
 
         response = None
-        if type(urls) == str:
-            url = urls
-        else:
-            endpoint = copy(urls[0])
-            endpoint["parameters"]["path"] += "/main.bin"
-            url = dl_utils.merge_url_with_params(
-                endpoint["url_format"], endpoint["parameters"]
-            )
+        url = self._get_download_url_v1(urls)
         range_header = dl_utils.get_range_header(task.offset, task.size)
 
         buffer = bytes()
         while retries > 0:
+            response = None
             buffer = bytes()
             try:
                 response = self.session.get(url, stream=True, timeout=10, headers={'Range': range_header})

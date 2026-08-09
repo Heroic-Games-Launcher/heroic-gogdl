@@ -1,3 +1,4 @@
+import configparser
 import os
 import json
 import sys
@@ -39,6 +40,20 @@ def get_flatpak_command(id: str) -> list[str]:
         pass
     return []
 
+def get_app_bundle_command(id: str) -> list[str]:
+    if sys.platform != "darwin":
+        return []
+    try:
+        p = subprocess.run(["mdfind", "kMDItemCFBundleIdentifier==", id], stdout=subprocess.PIPE, stderr=None)
+        if len(p.stdout) > 0:
+            bundle = p.stdout.split(b"\n")[0].decode("utf-8")
+            p = subprocess.run(["defaults", "read", bundle + "/Contents/Info.plist", "CFBundleExecutable"], stdout=subprocess.PIPE, stderr=None)
+            if len(p.stdout) > 0:
+                bin = p.stdout.split(b"\n")[0].decode("utf-8")
+                return [bundle + "/Contents/MacOS/" + bin]
+    except FileNotFoundError:
+        pass
+    return []
 
 # Supports launching linux builds
 def launch(arguments, unknown_args):
@@ -95,21 +110,44 @@ def launch(arguments, unknown_args):
         if sys.platform != "win32" and arguments.platform == 'windows' and not arguments.override_exe:
             if "scummvm.exe" in executable.lower():
                 flatpak_scummvm = get_flatpak_command("org.scummvm.ScummVM")
+                bundle_scummvm = get_app_bundle_command("org.scummvm.app")
                 native_scummvm = shutil.which("scummvm")
                 if native_scummvm:
                     native_scummvm = [native_scummvm]
             
-                native_runner = flatpak_scummvm or native_scummvm
+                native_runner = flatpak_scummvm or bundle_scummvm or native_scummvm
                 if native_runner:
                     wrapper = native_runner
                     executable = None
+                    # ScummVM games require a "path" option to be set in their configuration file (pointing to the
+                    # game installation dir). This path is usually set by ScriptInterpreter, but since SI is a Windows
+                    # application, this path will be wrong. Open the config file and update the path
+                    config_file = next((
+                        arg
+                        for i, arg in enumerate(launch_arguments)
+                        if launch_arguments[i-1] == '-c'
+                    ), None)
+                    config_section = launch_arguments[-1]
+                    if config_file and config_section:
+                        full_config_file = os.path.join(working_dir, config_file)
+                        config = configparser.ConfigParser()
+                        config.read(full_config_file)
+                        config.set(config_section, 'path', arguments.path)
+                        with open(full_config_file, 'w') as f:
+                            config.write(f)
             elif "dosbox.exe" in executable.lower():
                 flatpak_dosbox = get_flatpak_command("io.github.dosbox-staging")
-                native_dosbox= shutil.which("dosbox")
-                if native_dosbox:
-                    native_dosbox = [native_dosbox]
-                
-                native_runner = flatpak_dosbox or native_dosbox
+                bundle_dosbox = get_app_bundle_command("io.github.dosbox-staging")
+                for candidate in ["dosbox-staging", "dosbox"]:
+                    # Most distributions prefer "dosbox" for DOSBox Staging's
+                    #  binary and let different DOSBox variants conflict, but
+                    #  Homebrew in particular uses "dosbox-staging". As the
+                    #  latter is more specific we try that first.
+                    native_dosbox= shutil.which(candidate)
+                    if native_dosbox:
+                        native_dosbox = [native_dosbox]
+                        break
+                native_runner = flatpak_dosbox or bundle_dosbox or native_dosbox
                 if native_runner:
                     wrapper = native_runner
                     executable = None
