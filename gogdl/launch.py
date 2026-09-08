@@ -198,7 +198,7 @@ def launch(arguments, unknown_args):
                 pass
             environment.update({"LD_LIBRARY_PATH": ":".join(splitted)})
     
-    print("Launch command:", command)
+    print("Launch command:", command, flush=True)
 
     status = None
     if sys.platform == 'linux':
