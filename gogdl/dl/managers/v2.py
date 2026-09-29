@@ -259,13 +259,15 @@ class Manager:
             exit(2)
         dl_utils.prepare_location(self.path)
 
-        for dir in self.manifest.dirs:
-            manifest_dir_path = os.path.join(self.path, dir.path)
-            dl_utils.prepare_location(dl_utils.get_case_insensitive_name(manifest_dir_path))
         cancelled = executor.run()
 
         if cancelled:
             return
+
+        # Created after the run, so removing directories left empty by deleted files doesn't remove these
+        for dir in self.manifest.dirs:
+            manifest_dir_path = os.path.join(self.path, dir.path)
+            dl_utils.prepare_location(dl_utils.get_case_insensitive_name(manifest_dir_path))
 
         dl_utils.prepare_location(constants.MANIFESTS_DIR)
         if self.manifest:
