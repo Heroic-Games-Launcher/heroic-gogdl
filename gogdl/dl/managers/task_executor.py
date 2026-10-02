@@ -40,6 +40,8 @@ class ExecutingManager:
         self.linux_chunks_to_download = deque()
         self.tasks = deque()
         self.active_tasks = 0
+        # (destination, relative path) of files removed by this run
+        self.deleted_paths = list()
 
         self.processed_items = 0
         self.items_to_complete = 0
@@ -76,6 +78,7 @@ class ExecutingManager:
         for f in self.diff.deleted + self.diff.removed_redist:
             support_flag = generic.TaskFlag.SUPPORT if 'support' in f.flags else generic.TaskFlag.NONE
             self.tasks.append(generic.FileTask(f.path, flags=generic.TaskFlag.DELETE_FILE | support_flag))
+            self.deleted_paths.append((self.support if support_flag else self.path, f.path))
             if isinstance(f, v1.File):
                 required_disk_size_delta -= f.size
             elif isinstance(f, v2.DepotFile):
@@ -495,7 +498,27 @@ class ExecutingManager:
             return True
         
         self.shutdown()
+        if not self.fatal_error:
+            self.remove_empty_dirs()
         return self.fatal_error
+
+    def remove_empty_dirs(self):
+        # Directories that only contained deleted files would otherwise stay on disk.
+        # Some games (e.g. The Witcher 3) treat every directory in their content folders
+        # as a content package and hang when an empty leftover one is present.
+        for destination, file_path in self.deleted_paths:
+            root = os.path.normpath(destination)
+            path = dl_utils.get_case_insensitive_name(os.path.join(destination, file_path))
+            directory = os.path.dirname(os.path.normpath(path))
+            while directory != root and directory.startswith(root + os.sep):
+                try:
+                    if not os.path.isdir(directory) or os.listdir(directory):
+                        break
+                    os.rmdir(directory)
+                    self.logger.debug(f"Removed empty directory {directory}")
+                except OSError:
+                    break
+                directory = os.path.dirname(directory)
 
     def interrupt_shutdown(self):
         self.progress.completed = True
