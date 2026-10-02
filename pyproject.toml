@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "gogdl"
 description = "GOG Downloading module for Heroic Games Launcher"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 keywords = ["GOG", "HGL", "Heroic Games Launcher", "Games"]
 license = { text = "GPL-3" }
 authors = [
