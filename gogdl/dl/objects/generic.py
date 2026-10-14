@@ -97,7 +97,4 @@ class TerminateWorker:
 
 class FileExclusion:
     def matches(file, excludelist):
-        for pattern in excludelist:
-            if PurePath(file).full_match(pattern):
-                return True
-        return False
+        return any(PurePath(file).full_match(pattern) for pattern in excludelist)
