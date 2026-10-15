@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-from multiprocessing import freeze_support
-import gogdl.args as args
-from gogdl.dl.managers import manager
-from gogdl.dl.managers import dependencies
-import gogdl.api as api
-import gogdl.imports as imports
-import gogdl.launch as launch
-import gogdl.languages as languages
-import gogdl.saves as saves
-import gogdl.auth as auth
-from gogdl import version as gogdl_version
 import json
 import logging
+from multiprocessing import freeze_support
+
+import gogdl.api as api
+import gogdl.args as args
+import gogdl.auth as auth
+import gogdl.imports as imports
+import gogdl.languages as languages
+import gogdl.launch as launch
+import gogdl.saves as saves
+from gogdl import version as gogdl_version
+from gogdl.dl.managers import dependencies, manager
 
 
 def display_version():

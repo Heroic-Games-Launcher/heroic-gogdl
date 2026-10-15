@@ -1,10 +1,12 @@
-import os
 import glob
 import json
 import logging
+import os
 from sys import exit
-from gogdl import constants
+
 import requests
+
+from gogdl import constants
 
 
 def get_info(args, unknown_args):

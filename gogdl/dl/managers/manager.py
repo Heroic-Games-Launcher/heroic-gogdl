@@ -1,12 +1,13 @@
+import json
+import logging
+import os
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from sys import exit
-import os
-import logging
-import json
 
 from gogdl import constants
 from gogdl.dl.managers import linux, v1, v2
+
 
 @dataclass
 class UnsupportedPlatform(Exception):
@@ -102,7 +103,7 @@ class Manager:
         self.target_build = self.builds["items"][0]
 
         for build in self.builds["items"]:
-            if build["branch"] == None:
+            if build["branch"] is None:
                 self.target_build = build
                 break
 

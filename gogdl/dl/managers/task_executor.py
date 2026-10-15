@@ -2,20 +2,21 @@ import logging
 import os
 import signal
 import time
-from sys import exit
-from threading import Thread
-from collections import deque, Counter
-from multiprocessing import Queue, Manager as ProcessingManager
-from threading import Condition
+from collections import Counter, deque
+from multiprocessing import Manager as ProcessingManager
+from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
 from queue import Empty
+from sys import exit
+from threading import Condition, Thread
 from typing import Union
-from gogdl.dl import dl_utils
 
+from gogdl.dl import dl_utils
 from gogdl.dl.dl_utils import get_readable_size
+from gogdl.dl.objects import generic, linux, v1, v2
 from gogdl.dl.progressbar import ProgressBar
 from gogdl.dl.workers import task_executor
-from gogdl.dl.objects import generic, v2, v1, linux
+
 
 class ExecutingManager:
     def __init__(self, api_handler, allowed_threads, path, support, diff, secure_links) -> None:
@@ -105,17 +106,14 @@ class ExecutingManager:
         # Find biggest chunk to optimize how much memory is 'wasted' per chunk
         # Also create hashmap for those files
         for f in self.diff.new + self.diff.changed + self.diff.redist:
-            if isinstance(f, v1.File):
-                self.hash_map.update({f.path.lower(): f.hash})
-
-            elif isinstance(f, linux.LinuxFile):
+            if isinstance(f, (v1.File, linux.LinuxFile)):
                 self.hash_map.update({f.path.lower(): f.hash})
 
             elif isinstance(f, v2.DepotFile):
                 first_chunk_checksum = f.chunks[0]['md5'] if len(f.chunks) else None
                 checksum = f.md5 or f.sha256 or first_chunk_checksum
                 self.hash_map.update({f.path.lower(): checksum})
-                for i, chunk in enumerate(f.chunks):
+                for _i, chunk in enumerate(f.chunks):
                     shared_chunks_counter[chunk["compressedMd5"]] += 1
                     if self.biggest_chunk < chunk["size"]:
                         self.biggest_chunk = chunk["size"]
@@ -124,7 +122,7 @@ class ExecutingManager:
                 first_chunk_checksum = f.file.chunks[0]['md5'] if len(f.file.chunks) else None
                 checksum = f.file.md5 or f.file.sha256 or first_chunk_checksum
                 self.hash_map.update({f.file.path.lower(): checksum})
-                for i, chunk in enumerate(f.file.chunks):
+                for _i, chunk in enumerate(f.file.chunks):
                     if chunk.get("old_offset") is None:
                         shared_chunks_counter[chunk["compressedMd5"]] += 1
                         if self.biggest_chunk < chunk["size"]:
@@ -607,7 +605,7 @@ class ExecutingManager:
         try:
             if os.path.exists(self.resume_file):
                 os.remove(self.resume_file)
-        except:
+        except OSError:
             self.logger.error("Failed to remove resume file")
 
     def download_manager(self, task_cond: Condition, shm_cond: Condition):
@@ -669,7 +667,7 @@ class ExecutingManager:
 
             if no_shm:
                 with shm_cond:
-                    self.logger.debug(f"Waiting for more memory")
+                    self.logger.debug("Waiting for more memory")
                     shm_cond.wait(timeout=1.0)
 
         self.logger.debug("Download scheduler out..")
@@ -759,7 +757,7 @@ class ExecutingManager:
                         self.logger.warning(f"Chunk download failed, reason {res.fail_reason}")
                         try:
                             self.download_queue.put(res.task, timeout=1)
-                        except Exception as e:
+                        except Exception:
                             self.logger.warning("Failed to resubmit download task, pushing to chunks queue")
 
                     with task_cond:

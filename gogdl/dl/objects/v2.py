@@ -1,9 +1,9 @@
 import json
 import os
 
+from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
-from gogdl import constants
 from gogdl.languages import Language
 
 
@@ -232,9 +232,7 @@ class ManifestDiff(generic.BaseDiff):
                     if new_file.chunks[0]["md5"] != old_file.chunks[0]["md5"]:
                         comparison.changed.append(new_file)
                 else:
-                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 and old_file.sha256 != new_file.sha256):
-                        comparison.changed.append(FileDiff.compare(new_file, old_file))
-                    elif len(new_file.chunks) != len(old_file.chunks):
+                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 and old_file.sha256 != new_file.sha256) or len(new_file.chunks) != len(old_file.chunks):
                         comparison.changed.append(FileDiff.compare(new_file, old_file))
         return comparison
 

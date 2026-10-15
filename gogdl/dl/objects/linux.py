@@ -1,6 +1,5 @@
-from io import BytesIO
 import stat
-
+from io import BytesIO
 
 END_OF_CENTRAL_DIRECTORY = b"\x50\x4b\x05\x06"
 CENTRAL_DIRECTORY = b"\x50\x4b\x01\x02"
@@ -306,10 +305,7 @@ class InstallerHandler:
             from_b += self.start_of_archive_index
 
         from_b_repr = str(from_b) if from_b > -1 else ""
-        if size:
-            end_b = from_b + size - 1
-        else:
-            end_b = ""
+        end_b = from_b + size - 1 if size else ""
         range_header = self.get_range_header(from_b_repr, end_b)
 
         response = self.session.get(self.url, headers={'Range': range_header},

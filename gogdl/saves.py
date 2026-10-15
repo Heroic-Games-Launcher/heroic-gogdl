@@ -1,15 +1,16 @@
-import os
-import sys
-import logging
-import requests
-import urllib.parse
-import hashlib
 import datetime
 import gzip
+import hashlib
+import logging
+import os
+import sys
+import urllib.parse
 from enum import Enum
 
-import gogdl.dl.dl_utils as dl_utils
+import requests
+
 import gogdl.constants as constants
+import gogdl.dl.dl_utils as dl_utils
 
 LOCAL_TIMEZONE = datetime.datetime.utcnow().astimezone().tzinfo
 
@@ -62,8 +63,8 @@ class CloudStorageManager:
         )
 
         self.credentials = dict()
-        self.client_id = str()
-        self.client_secret = str()
+        self.client_id = ''
+        self.client_secret = ''
 
     def create_directory_map(self, path: str) -> list:
         """
@@ -288,7 +289,7 @@ class CloudStorageManager:
                 f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{fpath}",
                 stream=True,
             )
-        except:
+        except Exception:
             if (retries > 1):
                 self.logger.debug(f"Failed sync of {file}, retrying (retries left {retries - 1})")
                 self.download_file(file, retries - 1)

@@ -1,12 +1,14 @@
 import json
-import zlib
 import os
-import gogdl.constants as constants
-from gogdl.dl.objects import v1, v2
 import shutil
 import time
+import zlib
+from sys import platform
+
 import requests
-from sys import exit, platform
+
+import gogdl.constants as constants
+from gogdl.dl.objects import v1, v2
 
 PATH_SEPARATOR = os.sep
 TIMEOUT = 10
@@ -89,7 +91,7 @@ def get_dependency_link(api_handler):
 
 
 def merge_url_with_params(url, parameters):
-    for key in parameters.keys():
+    for key in parameters:
         url = url.replace("{" + key + "}", str(parameters[key]))
         if not url:
             print(f"Error ocurred getting a secure link: {url}")
@@ -153,7 +155,7 @@ def get_case_insensitive_name(path):
     while not os.path.exists(root):
         root = os.path.split(root)[0]
     
-    if not root[len(root) - 1] in ["/", "\\"]:
+    if root[len(root) - 1] not in ["/", "\\"]:
         root = root + os.sep
     # Separate unknown path from existing one
     s_working_dir = path.replace(root, "").split(os.sep)

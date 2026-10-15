@@ -1,8 +1,8 @@
-import queue
-from multiprocessing import Queue
-import threading
 import logging
-from time import sleep, time
+import queue
+import threading
+from multiprocessing import Queue
+from time import time
 
 
 class ProgressBar(threading.Thread):

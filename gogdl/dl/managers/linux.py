@@ -1,19 +1,19 @@
 # Manage downloading of linux native games using new zip method based on Range headers
+import hashlib
 import json
 import logging
-import hashlib
 import os.path
 import stat
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from zlib import crc32
+
+from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.managers.task_executor import ExecutingManager
+from gogdl.dl.objects import linux
 from gogdl.dl.objects.generic import BaseDiff
 from gogdl.dl.objects.v2 import DepotLink
-from gogdl.dl.workers import linux as linux_worker
-from gogdl.dl.objects import linux
 from gogdl.languages import Language
-from gogdl import constants
 
 
 def get_folder_name_from_windows_manifest(api_handler, id):
@@ -257,7 +257,7 @@ class Manager:
         diff = BaseDiff()
 
         final_files = list()
-        for i, file in enumerate(new):
+        for _i, file in enumerate(new):
             # Prepare file for download
             # Calculate data offsets 
             handler = None
