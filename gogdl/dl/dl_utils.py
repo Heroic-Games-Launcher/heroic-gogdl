@@ -1,12 +1,14 @@
 import json
-import zlib
 import os
-import gogdl.constants as constants
-from gogdl.dl.objects import v1, v2
 import shutil
 import time
+import zlib
+from sys import platform
+
 import requests
-from sys import exit, platform
+
+from gogdl import constants
+from gogdl.dl.objects import v1, v2
 
 PATH_SEPARATOR = os.sep
 TIMEOUT = 10
@@ -31,9 +33,9 @@ def get_zlib_encoded(api_handler, url):
             except zlib.error:
                 return x.json(), x.headers
             return decompressed, x.headers
-        except Exception:
+        except (OSError, ValueError, json.JSONDecodeError, zlib.error, requests.exceptions.RequestException):
             time.sleep(2)
-            retries-=1
+            retries -= 1
     return None, None
 
 
@@ -62,7 +64,7 @@ def get_secure_link(api_handler, path, gameId, generation=2, logger=None, root=N
 
     try:
         r = requests.get(url, headers=api_handler.session.headers, timeout=TIMEOUT)
-    except BaseException as exception:
+    except (OSError, ValueError, KeyError, requests.exceptions.RequestException) as exception:
         if logger:
             logger.info(exception)
         time.sleep(0.2)
@@ -89,7 +91,7 @@ def get_dependency_link(api_handler):
 
 
 def merge_url_with_params(url, parameters):
-    for key in parameters.keys():
+    for key in parameters:
         url = url.replace("{" + key + "}", str(parameters[key]))
         if not url:
             print(f"Error ocurred getting a secure link: {url}")
@@ -176,4 +178,3 @@ def get_case_insensitive_name(path):
     if paths_to_find != paths_found:
         root = os.path.join(root, os.sep.join(s_working_dir[paths_found:]))
     return root
-

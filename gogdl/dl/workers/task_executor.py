@@ -1,23 +1,26 @@
-from multiprocessing.shared_memory import SharedMemory
-import os
-from queue import Empty
-import shutil
-import sys
-import stat
-import traceback
-import time
-import requests
-import zlib
+from __future__ import annotations
+
 import hashlib
-from io import BytesIO
-from typing import Optional, Union
+import os
+import shutil
+import stat
+import sys
+import time
+import traceback
+import zlib
 from copy import copy
-from gogdl.dl import dl_utils
 from dataclasses import dataclass
 from enum import Enum, auto
+from io import BytesIO
 from multiprocessing import Process, Queue
+from multiprocessing.shared_memory import SharedMemory
+from queue import Empty
+
+import gogdl_xdelta3  # pyright: ignore[reportMissingImports, reportMissingModuleSource]
+import requests
+
+from gogdl.dl import dl_utils
 from gogdl.dl.objects.generic import MemorySegment, TaskFlag, TerminateWorker
-import gogdl_xdelta3
 
 
 class FailReason(Enum):
@@ -58,27 +61,27 @@ class WriterTask:
     file_path: str
     flags: TaskFlag
 
-    hash: Optional[str] = None
-    size: Optional[int] = None
-    shared_memory: Optional[MemorySegment] = None
-    old_destination: Optional[str] = None
-    old_file: Optional[str] = None
-    old_offset: Optional[int] = None
+    hash: str | None = None
+    size: int | None = None
+    shared_memory: MemorySegment | None = None
+    old_destination: str | None = None
+    old_file: str | None = None
+    old_offset: int | None = None
 
-    patch_file: Optional[str] = None
+    patch_file: str | None = None
 
 @dataclass
 class DownloadTaskResult:
     success: bool
-    fail_reason: Optional[FailReason]
-    task: Union[DownloadTask2, DownloadTask1]
-    download_size: Optional[int] = None
-    decompressed_size: Optional[int] = None
+    fail_reason: FailReason | None
+    task: DownloadTask2 | DownloadTask1
+    download_size: int | None = None
+    decompressed_size: int | None = None
 
 @dataclass
 class WriterTaskResult:
     success: bool
-    task: Union[WriterTask, TerminateWorker]
+    task: WriterTask | TerminateWorker
     written: int = 0
 
 
@@ -96,7 +99,7 @@ class Download(Process):
     def run(self):
         while not self.early_exit:
             try:
-                task: Union[DownloadTask1, DownloadTask2, TerminateWorker] = self.download_queue.get(timeout=1)
+                task: DownloadTask1 | DownloadTask2 | TerminateWorker = self.download_queue.get(timeout=1)
             except Empty:
                continue 
 
@@ -171,7 +174,7 @@ class Download(Process):
             except requests.exceptions.RequestException as e:
                 print("Connection failed", e)
                 fail_reason = FailReason.INCOMPLETE_READ
-            except Exception as e:
+            except (OSError, ValueError, zlib.error) as e:
                 print("Connection failed", e)
                 fail_reason = FailReason.UNKNOWN
             else:
@@ -191,7 +194,7 @@ class Download(Process):
             decompressed_size = len(buffer)
             self.shared_memory.buf[task.memory_segment.offset:decompressed_size+task.memory_segment.offset] = buffer
 
-        except Exception as e:
+        except (BufferError, TypeError, ValueError) as e:
             print("ERROR", e)
             self.results_queue.put(DownloadTaskResult(False, FailReason.UNKNOWN, task))
             return 
@@ -220,7 +223,7 @@ class Download(Process):
                 for chunk in response.iter_content(1024 * 512):
                     buffer += chunk 
                     self.speed_queue.put((len(chunk), len(chunk)))
-            except Exception as e:
+            except (OSError, requests.exceptions.RequestException) as e:
                 print("Connection failed", e)
                 #Handle exception
                 if response and response.status_code == 401:
@@ -239,7 +242,7 @@ class Download(Process):
             download_size = len(buffer)
             self.shared_memory.buf[task.memory_segment.offset:download_size + task.memory_segment.offset] = buffer
 
-        except Exception as e:
+        except (BufferError, TypeError, ValueError) as e:
             print("ERROR", e)
             self.results_queue.put(DownloadTaskResult(False, FailReason.UNKNOWN, task))
             return 
@@ -266,7 +269,7 @@ class Writer(Process):
 
         while not self.early_exit:
             try:
-                task: Union[WriterTask, TerminateWorker] = self.writer_queue.get(timeout=2)
+                task: WriterTask | TerminateWorker = self.writer_queue.get(timeout=2)
             except Empty:
                 continue
 
@@ -299,7 +302,8 @@ class Writer(Process):
                 if file_handle:
                     print("Opening on unclosed file")
                     file_handle.close()
-                file_handle = open(task_path, 'wb')
+                # This handle remains open until a later CLOSE_FILE task.
+                file_handle = open(task_path, 'wb')  # noqa: SIM115
                 current_file = task_path
 
                 self.results_queue.put(WriterTaskResult(True, task))
@@ -327,7 +331,7 @@ class Writer(Process):
                     shutil.copy(dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file)), task_path)
                 except shutil.SameFileError:
                     pass
-                except Exception:
+                except (OSError, shutil.Error):
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
                 self.results_queue.put(WriterTaskResult(True, task))
@@ -347,13 +351,13 @@ class Writer(Process):
                 if task.flags & TaskFlag.DELETE_FILE and os.path.exists(task_path):
                     try:
                         os.remove(task_path)
-                    except OSError as e:
+                    except OSError:
                         self.results_queue.put(WriterTaskResult(False, task))
                         continue
                 dest = task.old_destination or task.destination
                 try:
                     os.rename(dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file)), task_path)
-                except OSError as e:
+                except OSError:
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
 
@@ -380,7 +384,7 @@ class Writer(Process):
                     target = task_path
                     gogdl_xdelta3.patch(source, patch, target, self.speed_queue)
 
-                except Exception as e:
+                except (OSError, ValueError, RuntimeError) as e:
                     print("Patch failed", e)
                     print(traceback.format_exc())
                     self.results_queue.put(WriterTaskResult(False, task))
@@ -399,7 +403,7 @@ class Writer(Process):
                 try:
                     if os.path.exists(task_path):
                         os.remove(task_path)
-                except OSError as e:
+                except OSError:
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
 
@@ -412,7 +416,7 @@ class Writer(Process):
                     try:
                         st = os.stat(task_path)
                         os.chmod(task_path, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-                    except Exception as e:
+                    except OSError:
                         self.results_queue.put(WriterTaskResult(False, task))
                         continue
                 self.results_queue.put(WriterTaskResult(True, task))
@@ -437,10 +441,9 @@ class Writer(Process):
                     if task.flags & TaskFlag.OFFLOAD_TO_CACHE and task.hash:
                         cache_file_path = os.path.join(self.cache, task.hash)
                         dl_utils.prepare_location(self.cache)
-                        cache_file = open(cache_file_path, 'wb')
-                        cache_file.write(self.shared_memory.buf[offset:end].tobytes())
-                        self.speed_queue.put((task.size, 0))
-                        cache_file.close()
+                        with open(cache_file_path, 'wb') as cache_file:
+                            cache_file.write(self.shared_memory.buf[offset:end].tobytes())
+                            self.speed_queue.put((task.size, 0))
                 elif task.old_file:
                     if not task.size:
                         print("No size")
@@ -448,28 +451,27 @@ class Writer(Process):
                         continue
                     dest = task.old_destination or task.destination
                     old_file_path = dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file))
-                    old_file_handle = open(old_file_path, "rb")
-                    if task.old_offset:
-                        old_file_handle.seek(task.old_offset)
-                    left = task.size
-                    if task.flags & TaskFlag.ZIP_DEC:
-                        decompressor = zlib.decompressobj(-15)
-                    else:
-                        decompressor = None
-                    while left > 0:
-                        chunk = old_file_handle.read(min(1024*1024, left))
-                        if decompressor:
-                            data = decompressor.decompress(chunk)
+                    with open(old_file_path, "rb") as old_file_handle:
+                        if task.old_offset:
+                            old_file_handle.seek(task.old_offset)
+                        left = task.size
+                        if task.flags & TaskFlag.ZIP_DEC:
+                            decompressor = zlib.decompressobj(-15)
                         else:
-                            data = chunk
-                        written += file_handle.write(data)
-                        self.speed_queue.put((len(data), len(chunk)))
-                        left -= len(chunk)
-                    old_file_handle.close()
+                            decompressor = None
+                        while left > 0:
+                            chunk = old_file_handle.read(min(1024*1024, left))
+                            if decompressor:
+                                data = decompressor.decompress(chunk)
+                            else:
+                                data = chunk
+                            written += file_handle.write(data)
+                            self.speed_queue.put((len(data), len(chunk)))
+                            left -= len(chunk)
                     if task.flags & TaskFlag.ZIP_DEC:
                         written = written - task.size
 
-            except Exception as e:
+            except (OSError, ValueError, zlib.error) as e:
                 print("Writer exception", e)
                 self.results_queue.put(WriterTaskResult(False, task))
             else:
@@ -478,4 +480,3 @@ class Writer(Process):
         
         self.shared_memory.close()
         shutil.rmtree(self.cache, ignore_errors=True)
-

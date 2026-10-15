@@ -1,21 +1,23 @@
+from __future__ import annotations
+
 import logging
 import os
 import signal
 import time
-from sys import exit
-from threading import Thread
-from collections import deque, Counter
-from multiprocessing import Queue, Manager as ProcessingManager
-from threading import Condition
+from collections import Counter, deque
+from multiprocessing import Manager as ProcessingManager
+from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
-from queue import Empty
-from typing import Union
-from gogdl.dl import dl_utils
+from queue import Empty, Full
+from sys import exit
+from threading import Condition, Thread
 
+from gogdl.dl import dl_utils
 from gogdl.dl.dl_utils import get_readable_size
+from gogdl.dl.objects import generic, linux, v1, v2
 from gogdl.dl.progressbar import ProgressBar
 from gogdl.dl.workers import task_executor
-from gogdl.dl.objects import generic, v2, v1, linux
+
 
 class ExecutingManager:
     def __init__(self, api_handler, allowed_threads, path, support, diff, secure_links) -> None:
@@ -34,21 +36,21 @@ class ExecutingManager:
 
         self.shared_memory = None
         self.shm_segments = deque()
-        self.hash_map = dict()
+        self.hash_map = {}
         self.v2_chunks_to_download = deque()
         self.v1_chunks_to_download = deque()
         self.linux_chunks_to_download = deque()
         self.tasks = deque()
         self.active_tasks = 0
         # (destination, relative path) of files removed by this run
-        self.deleted_paths = list()
+        self.deleted_paths = []
 
         self.processed_items = 0
         self.items_to_complete = 0
 
-        self.download_workers = list()
+        self.download_workers = []
         self.writer_worker = None
-        self.threads = list()
+        self.threads = []
 
         self.shm_cond = Condition()
         self.task_cond = Condition()
@@ -92,8 +94,8 @@ class ExecutingManager:
         missing_files = set()
         mismatched_files = set()
 
-        downloaded_v1 = dict()
-        downloaded_linux = dict()
+        downloaded_v1 = {}
+        downloaded_linux = {}
         cached = set()
         
         # Re-use caches
@@ -105,10 +107,7 @@ class ExecutingManager:
         # Find biggest chunk to optimize how much memory is 'wasted' per chunk
         # Also create hashmap for those files
         for f in self.diff.new + self.diff.changed + self.diff.redist:
-            if isinstance(f, v1.File):
-                self.hash_map.update({f.path.lower(): f.hash})
-
-            elif isinstance(f, linux.LinuxFile):
+            if isinstance(f, (v1.File, linux.LinuxFile)):
                 self.hash_map.update({f.path.lower(): f.hash})
 
             elif isinstance(f, v2.DepotFile):
@@ -117,8 +116,7 @@ class ExecutingManager:
                 self.hash_map.update({f.path.lower(): checksum})
                 for i, chunk in enumerate(f.chunks):
                     shared_chunks_counter[chunk["compressedMd5"]] += 1
-                    if self.biggest_chunk < chunk["size"]:
-                        self.biggest_chunk = chunk["size"]
+                    self.biggest_chunk = max(self.biggest_chunk, chunk["size"])
 
             elif isinstance(f, v2.FileDiff):
                 first_chunk_checksum = f.file.chunks[0]['md5'] if len(f.file.chunks) else None
@@ -127,8 +125,7 @@ class ExecutingManager:
                 for i, chunk in enumerate(f.file.chunks):
                     if chunk.get("old_offset") is None:
                         shared_chunks_counter[chunk["compressedMd5"]] += 1
-                        if self.biggest_chunk < chunk["size"]:
-                            self.biggest_chunk = chunk["size"]
+                        self.biggest_chunk = max(self.biggest_chunk, chunk["size"])
             
             elif isinstance(f, v2.FilePatchDiff):
                 first_chunk_checksum = f.new_file.chunks[0]['md5'] if len(f.new_file.chunks) else None
@@ -136,8 +133,7 @@ class ExecutingManager:
                 self.hash_map.update({f.new_file.path.lower(): checksum})
                 for chunk in f.chunks:
                     shared_chunks_counter[chunk["compressedMd5"]] += 1
-                    if self.biggest_chunk < chunk["size"]:
-                        self.biggest_chunk = chunk["size"]
+                    self.biggest_chunk = max(self.biggest_chunk, chunk["size"])
 
 
         if not self.biggest_chunk:
@@ -153,7 +149,7 @@ class ExecutingManager:
                 mismatch = 0
 
                 with open(self.resume_file, 'r') as f:
-                    for line in f.readlines():
+                    for line in f:
                         hash, support, file_path = line.strip().split(':')
                         
                         if support == 'support':
@@ -178,7 +174,7 @@ class ExecutingManager:
                 if mismatch:
                     self.logger.warning(f'There are {mismatch} changed files since last download, and will be re-downloaded')
 
-            except Exception as e:
+            except (OSError, ValueError, KeyError, TypeError) as e:
                 self.logger.error(f"Unable to resume download, continuing as normal {e}")
 
 
@@ -538,7 +534,7 @@ class ExecutingManager:
         for t in self.threads:
             t.join(timeout=5.0)
             if t.is_alive():
-                self.logger.warning(f'Thread did not terminate! {repr(t)}')
+                self.logger.warning(f'Thread did not terminate! {t!r}')
 
         for child in self.download_workers:
             child.join(timeout=5.0)
@@ -612,7 +608,7 @@ class ExecutingManager:
         try:
             if os.path.exists(self.resume_file):
                 os.remove(self.resume_file)
-        except:
+        except OSError:
             self.logger.error("Failed to remove resume file")
 
     def download_manager(self, task_cond: Condition, shm_cond: Condition):
@@ -636,7 +632,7 @@ class ExecutingManager:
                         self.logger.debug(f"Pushed v1 download to queue {chunk_id} {product_id} {offset} {chunk_size}")
                         self.active_tasks += 1
                         continue
-                    except Exception as e:
+                    except (Full, OSError, ValueError, RuntimeError) as e:
                         self.logger.warning(f"Failed to push v1 task to download {e}")
                         self.v1_chunks_to_download.appendleft((product_id, chunk_id, offset, chunk_size))
                         self.shm_segments.appendleft(memory_segment)
@@ -648,7 +644,7 @@ class ExecutingManager:
                         self.logger.debug(f"Pushed linux download to queue {chunk_id} {product_id} {offset} {chunk_size}")
                         self.active_tasks += 1
                         continue
-                    except Exception as e:
+                    except (Full, OSError, ValueError, RuntimeError) as e:
                         self.logger.warning(f"Failed to push v1 task to download {e}")
                         self.v1_chunks_to_download.appendleft((product_id, chunk_id, offset, chunk_size))
                         self.shm_segments.appendleft(memory_segment)
@@ -660,7 +656,7 @@ class ExecutingManager:
                         self.download_queue.put(task_executor.DownloadTask2(product_id, chunk_hash, memory_segment), timeout=1)
                         self.logger.debug(f"Pushed DownloadTask2 for {chunk_hash}")
                         self.active_tasks += 1
-                    except Exception as e:
+                    except (Full, OSError, ValueError, RuntimeError) as e:
                         self.logger.warning(f"Failed to push task to download {e}")
                         self.v2_chunks_to_download.appendleft((product_id, chunk_hash))
                         self.shm_segments.appendleft(memory_segment)
@@ -674,7 +670,7 @@ class ExecutingManager:
 
             if no_shm:
                 with shm_cond:
-                    self.logger.debug(f"Waiting for more memory")
+                    self.logger.debug("Waiting for more memory")
                     shm_cond.wait(timeout=1.0)
 
         self.logger.debug("Download scheduler out..")
@@ -682,7 +678,7 @@ class ExecutingManager:
 
     def process_task_results(self, task_cond: Condition):
         self.logger.debug("Download results collector starting")
-        ready_chunks = dict()
+        ready_chunks = {}
 
         try:
             task = self.tasks.popleft()
@@ -707,13 +703,13 @@ class ExecutingManager:
                     if task.flags & generic.TaskFlag.OPEN_FILE:
                         current_file = task.path
                         current_dest = task_dest 
-                except Exception as e:
+                except (Full, OSError, ValueError, RuntimeError) as e:
                     self.tasks.appendleft(task)
                     self.logger.warning(f"Failed to add queue element {e}")
                     continue
 
                 try:
-                    task: Union[generic.ChunkTask, generic.V1Task] = self.tasks.popleft()
+                    task: generic.ChunkTask | generic.V1Task = self.tasks.popleft()
                 except IndexError:
                     break
                 continue
@@ -736,7 +732,7 @@ class ExecutingManager:
                     if task.old_flags & generic.TaskFlag.SUPPORT:
                         old_destination = self.support
                     self.writer_queue.put(task_executor.WriterTask(current_dest, current_file, flags=flags, shared_memory=shm, old_destination=old_destination, old_file=task.old_file, old_offset=task.old_offset, size=task.size, hash=task.md5), timeout=1)
-                except Exception as e:
+                except (Full, OSError, ValueError, RuntimeError) as e:
                     self.logger.error(f"Adding to writer queue failed {e}")
                     break
 
@@ -762,14 +758,14 @@ class ExecutingManager:
                         self.logger.warning(f"Chunk download failed, reason {res.fail_reason}")
                         try:
                             self.download_queue.put(res.task, timeout=1)
-                        except Exception as e:
+                        except (Full, OSError, ValueError, RuntimeError):
                             self.logger.warning("Failed to resubmit download task, pushing to chunks queue")
 
                     with task_cond:
                         task_cond.notify()
                 except Empty:
                     pass
-                except Exception as e:
+                except (OSError, ValueError, RuntimeError, TypeError, AttributeError, KeyError) as e:
                     self.logger.warning(f"Unhandled exception {e}")
 
         self.logger.debug("Download results collector exiting...")

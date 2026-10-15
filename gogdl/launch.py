@@ -1,15 +1,19 @@
+from __future__ import annotations
+
 import configparser
-import os
 import json
-import sys
-import subprocess
-import time
-from gogdl.dl.dl_utils import get_case_insensitive_name
-from ctypes import *
-from gogdl.process import Process
-import signal
-import shutil
+import os
 import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from ctypes import *
+
+from gogdl.dl.dl_utils import get_case_insensitive_name
+from gogdl.process import Process
+
 
 class NoMoreChildren(Exception):
     pass
@@ -21,7 +25,7 @@ def get_flatpak_command(id: str) -> list[str]:
     process_command = ["flatpak", "info", id] 
     if os.path.exists("/.flatpak-info"):
         try:
-            spawn_test = subprocess.run(["flatpak-spawn", "--host", "ls"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            spawn_test = subprocess.run(["flatpak-spawn", "--host", "ls"], check=False, capture_output=True)
         except FileNotFoundError:
             return []
         if spawn_test.returncode != 0:
@@ -31,7 +35,7 @@ def get_flatpak_command(id: str) -> list[str]:
         process_command = new_process_command + process_command
 
     try:
-        output = subprocess.run(process_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output = subprocess.run(process_command, check=False, capture_output=True)
 
         if output.returncode == 0:
             return new_process_command + ["flatpak", "run", id]
@@ -44,10 +48,10 @@ def get_app_bundle_command(id: str) -> list[str]:
     if sys.platform != "darwin":
         return []
     try:
-        p = subprocess.run(["mdfind", "kMDItemCFBundleIdentifier==", id], stdout=subprocess.PIPE, stderr=None)
+        p = subprocess.run(["mdfind", "kMDItemCFBundleIdentifier==", id], check=False, stdout=subprocess.PIPE, stderr=None)
         if len(p.stdout) > 0:
             bundle = p.stdout.split(b"\n")[0].decode("utf-8")
-            p = subprocess.run(["defaults", "read", bundle + "/Contents/Info.plist", "CFBundleExecutable"], stdout=subprocess.PIPE, stderr=None)
+            p = subprocess.run(["defaults", "read", bundle + "/Contents/Info.plist", "CFBundleExecutable"], check=False, stdout=subprocess.PIPE, stderr=None)
             if len(p.stdout) > 0:
                 bin = p.stdout.split(b"\n")[0].decode("utf-8")
                 return [bundle + "/Contents/MacOS/" + bin]
@@ -66,7 +70,7 @@ def launch(arguments, unknown_args):
     envvars = {}
 
     unified_platform = {"win32": "windows", "darwin": "osx", "linux": "linux"}
-    command = list()
+    command = []
     working_dir = arguments.path
     heroic_exe_wrapper = os.environ.get("HEROIC_GOGDL_WRAPPER_EXE")
     # If type is a string we know it's a path to start.sh on linux

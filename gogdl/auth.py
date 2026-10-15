@@ -3,10 +3,11 @@
 import json
 import logging
 import os.path
-import requests
 import time
-from gogdl import net
-from gogdl import version
+
+import requests
+
+from gogdl import net, version
 
 CODE_URL = "https://auth.gog.com/token?client_id=46899977096215655&client_secret=9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fembed.gog.com%2Fon_login_success%3Forigin%3Dclient&code="
 CLIENT_ID = "46899977096215655"
@@ -52,9 +53,12 @@ class AuthorizationManager:
 
         credentials = self.credentials_data.get(client_id)
         if not credentials:
-            if client_id != CLIENT_ID and client_secret != CLIENT_SECRET:
-                if self.refresh_credentials(client_id, client_secret):
-                    return self.credentials_data.get(client_id)
+            if (
+                client_id != CLIENT_ID
+                and client_secret != CLIENT_SECRET
+                and self.refresh_credentials(client_id, client_secret)
+            ):
+                return self.credentials_data.get(client_id)
             return None
 
         if self.is_credential_expired(client_id):

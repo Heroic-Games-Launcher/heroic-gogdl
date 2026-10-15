@@ -1,17 +1,21 @@
 # Handle newer depots download
 # This was introduced in GOG Galaxy 2.0, it features compression and files split by chunks
-import json
-from sys import exit
-from gogdl.dl import dl_utils
-import gogdl.dl.objects.v2 as v2
 import hashlib
+import json
+import logging
+import os
+from sys import exit
+
+from gogdl import constants
+from gogdl.dl import dl_utils
 from gogdl.dl.managers import dependencies
 from gogdl.dl.managers.task_executor import ExecutingManager
-from gogdl.dl.workers import task_executor
+from gogdl.dl.objects import v2
 from gogdl.languages import Language
-from gogdl import constants
-import os
-import logging
+
+
+class ManifestUnavailable(Exception):
+    pass
 
 
 class Manager:
@@ -43,7 +47,7 @@ class Manager:
         if self.arguments.dlcs_list:
             self.dlcs_list = self.arguments.dlcs_list.split(",")
         else:
-            self.dlcs_list = list()
+            self.dlcs_list = []
         self.dlc_only = self.arguments.dlc_only
 
         self.manifest = None
@@ -63,12 +67,14 @@ class Manager:
         size_data = self.manifest.calculate_download_size()
 
         for depot in repository["depots"]:
-            if depot["dependencyId"] in self.manifest.dependencies_ids:
-                if not depot["executable"]["path"].startswith("__redist"):
-                    size_data[self.game_id]['*']["download_size"] += depot.get("compressedSize") or 0
-                    size_data[self.game_id]['*']["disk_size"] += depot.get("size") or 0
+            if (
+                depot["dependencyId"] in self.manifest.dependencies_ids
+                and not depot["executable"]["path"].startswith("__redist")
+            ):
+                size_data[self.game_id]['*']["download_size"] += depot.get("compressedSize") or 0
+                size_data[self.game_id]['*']["disk_size"] += depot.get("size") or 0
 
-        available_branches = set([build["branch"] for build in self.builds["items"] if build["branch"]])
+        available_branches = {build["branch"] for build in self.builds["items"] if build["branch"]}
         available_branches_list = [None] + list(available_branches)
         
 
@@ -102,7 +108,6 @@ class Manager:
                     old_manifest = dl_utils.create_manifest_class(json_data, self.api_handler)
                 except json.JSONDecodeError:
                     old_manifest = None
-                    pass
 
         if self.is_verifying:
             if old_manifest:
@@ -111,7 +116,7 @@ class Manager:
                 dlcs_user_owns = self.manifest.dlcs or []
                 old_manifest = None
             else:
-                raise Exception("No manifest stored locally, unable to verify")
+                raise ManifestUnavailable("No manifest stored locally, unable to verify")
         else:
             self.get_meta()
             dlcs_user_owns = self.get_dlcs_user_owns(
@@ -161,7 +166,7 @@ class Manager:
         secure_link_endpoints_ids = [product["id"] for product in dlcs_user_owns]
         if not self.dlc_only:
             secure_link_endpoints_ids.append(self.game_id)
-        secure_links = dict()
+        secure_links = {}
         for product_id in secure_link_endpoints_ids:
             secure_links.update(
                 {
@@ -286,7 +291,7 @@ class Manager:
 
     def get_dlcs_user_owns(self, info_command=False, requested_dlcs=None):
         if requested_dlcs is None:
-            requested_dlcs = list()
+            requested_dlcs = []
         if not self.dlcs_should_be_downloaded and not info_command:
             return []
         self.logger.debug("Getting dlcs user owns")
@@ -306,4 +311,3 @@ class Manager:
             ):
                 dlcs.append({"title": product["name"], "id": product["productId"]})
         return dlcs
-

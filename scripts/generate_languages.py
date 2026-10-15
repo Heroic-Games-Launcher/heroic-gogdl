@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import urllib.request
 import json
+import urllib.request
 
 # Scipt used to generate entries for LANGUAGES static.
 

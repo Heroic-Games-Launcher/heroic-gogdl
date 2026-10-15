@@ -1,7 +1,7 @@
-import queue
-from multiprocessing import Queue
-import threading
 import logging
+import queue
+import threading
+from multiprocessing import Queue
 from time import sleep, time
 
 IDLE_POLL_INTERVAL = 0.01

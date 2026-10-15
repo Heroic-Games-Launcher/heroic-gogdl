@@ -1,8 +1,9 @@
 import json
 import os
+
+from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v2
-from gogdl import constants
 from gogdl.languages import Language
 
 
@@ -101,12 +102,12 @@ class Manifest:
         return list(languages_dict)
 
     def calculate_download_size(self):
-        data = dict()
+        data = {}
 
         for depot in self.all_depots:
             for product_id in depot.game_ids:
                 if product_id not in data:
-                    data[product_id] = dict()
+                    data[product_id] = {}
                 product_data = data[product_id]
                 
                 for lang in depot.languages:
@@ -145,11 +146,11 @@ class ManifestDiff(generic.BaseDiff):
             comparison.new = new_manifest.files
             return comparison
 
-        new_files = dict()
+        new_files = {}
         for file in new_manifest.files:
             new_files.update({file.path.lower(): file})
         
-        old_files = dict()
+        old_files = {}
         for file in old_manifest.files:
             old_files.update({file.path.lower(): file})
 

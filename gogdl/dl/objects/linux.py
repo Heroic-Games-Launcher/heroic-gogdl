@@ -1,6 +1,5 @@
-from io import BytesIO
 import stat
-
+from io import BytesIO
 
 END_OF_CENTRAL_DIRECTORY = b"\x50\x4b\x05\x06"
 CENTRAL_DIRECTORY = b"\x50\x4b\x01\x02"

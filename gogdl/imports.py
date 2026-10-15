@@ -1,10 +1,12 @@
-import os
 import glob
 import json
 import logging
+import os
 from sys import exit
-from gogdl import constants
+
 import requests
+
+from gogdl import constants
 
 
 def get_info(args, unknown_args):
@@ -26,9 +28,8 @@ def get_info(args, unknown_args):
         if not info_file:
             print("Error importing, no info file")
             return
-        f = open(info_file, "r")
-        info = json.loads(f.read())
-        f.close()
+        with open(info_file, "r") as f:
+            info = json.loads(f.read())
 
         title = info["name"]
         game_id = info["rootGameId"]
@@ -40,9 +41,8 @@ def get_info(args, unknown_args):
         else:
             installed_language = "en-US"
         if build_id_file:
-            f = open(build_id_file, "r")
-            build = json.loads(f.read())
-            f.close()
+            with open(build_id_file, "r") as f:
+                build = json.loads(f.read())
             build_id = build.get("buildId")
 
         version_name = build_id
@@ -63,8 +63,8 @@ def get_info(args, unknown_args):
             version_name = target_build["version_name"]
     if platform == "linux" and os.path.exists(os.path.join(path, "gameinfo")):
         # Linux version installed using installer
-        gameinfo_file = open(os.path.join(path, "gameinfo"), "r")
-        data = gameinfo_file.read()
+        with open(os.path.join(path, "gameinfo"), "r") as gameinfo_file:
+            data = gameinfo_file.read()
         lines = data.split("\n")
         title = lines[0]
         version_name = lines[1]
@@ -110,9 +110,8 @@ def load_game_details(path):
         found = glob.glob(os.path.join(path, "game", "goggame-*.info"))
         build_id = glob.glob(os.path.join(path, "game", "goggame-*.id"))
         platform = "linux"
-    if not found:
-        if os.path.exists(os.path.join(path, "gameinfo")):
-            return (None, None, "linux", [])
+    if not found and os.path.exists(os.path.join(path, "gameinfo")):
+        return (None, None, "linux", [])
 
     root_id = None
     # Array of DLC game ids
@@ -128,4 +127,3 @@ def load_game_details(path):
             dlcs.append(data["gameId"])
 
     return (os.path.join(base_path, f"goggame-{root_id}.info"), os.path.join(base_path, f"goggame-{root_id}.id") if build_id else None, platform, dlcs)
-
