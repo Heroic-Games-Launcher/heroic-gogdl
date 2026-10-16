@@ -752,8 +752,6 @@ class ExecutingManager:
                     if res.success:
                         self.logger.debug(f"Chunk {res.task.compressed_sum} ready")
                         ready_chunks[res.task.compressed_sum] = res
-                        self.progress.update_downloaded_size(res.download_size)
-                        self.progress.update_decompressed_size(res.decompressed_size)
                         self.active_tasks -= 1
                     else:
                         self.logger.warning(f"Chunk download failed, reason {res.fail_reason}")
@@ -817,7 +815,6 @@ class ExecutingManager:
                     self.fatal_error = True
                     return
     
-                self.progress.update_bytes_written(res.written)
                 if res.task.flags & generic.TaskFlag.RELEASE_MEM and res.task.shared_memory:
                     self.logger.debug(f"Releasing memory {res.task.shared_memory}")
                     self.shm_segments.appendleft(res.task.shared_memory)

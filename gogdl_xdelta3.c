@@ -92,7 +92,7 @@ void put_progress(PyObject *queue, usize_t written, usize_t read) {
 
   Py_DECREF(put_method);
   Py_DECREF(progress_tuple);
-  Py_DECREF(put_result);
+  Py_XDECREF(put_result);
 }
 
 static PyObject *patch(PyObject *self, PyObject *args) {
@@ -130,16 +130,22 @@ static PyObject *patch(PyObject *self, PyObject *args) {
   }
   cache_init(&block_cache_nav);
   input_buffer = malloc(BLOCK_SIZE);
+
+  memset(&stream, 0, sizeof(stream));
+  memset(&config, 0, sizeof(config));
+  memset(&src, 0, sizeof(src));
+
+  Py_BEGIN_ALLOW_THREADS
   block_cache = malloc(BLOCK_CACHE_SIZE * sizeof(struct cache));
   if (!block_cache) {
-    PyErr_SetFromErrno(PyExc_MemoryError);
-    goto cleanup;
+    Py_BLOCK_THREADS PyErr_NoMemory();
+    Py_UNBLOCK_THREADS goto cleanup;
   }
   memset(block_cache, 0, sizeof(block_cache[0]) * BLOCK_CACHE_SIZE);
   block_cache[0].blk = malloc((BLOCK_SIZE) * BLOCK_CACHE_SIZE);
   if (!block_cache[0].blk) {
-    PyErr_SetFromErrno(PyExc_MemoryError);
-    goto cleanup;
+    Py_BLOCK_THREADS PyErr_NoMemory();
+    Py_UNBLOCK_THREADS goto cleanup;
   }
   cache_size = BLOCK_CACHE_SIZE;
   for (int i=0; i<cache_size;i++) {
@@ -148,7 +154,7 @@ static PyObject *patch(PyObject *self, PyObject *args) {
     cache_add(block_cache_nav.prev, &block_cache_nav, &block_cache[i].nav);
   }
 
-  Py_BEGIN_ALLOW_THREADS if (!(fsource = fopen(source, "rb"))) {
+  if (!(fsource = fopen(source, "rb"))) {
     Py_BLOCK_THREADS PyErr_SetFromErrno(PyExc_OSError);
     Py_UNBLOCK_THREADS goto cleanup;
   }
@@ -162,10 +168,6 @@ static PyObject *patch(PyObject *self, PyObject *args) {
     Py_BLOCK_THREADS PyErr_SetFromErrno(PyExc_OSError);
     Py_UNBLOCK_THREADS goto cleanup;
   }
-
-  memset(&stream, 0, sizeof(stream));
-  memset(&config, 0, sizeof(config));
-  memset(&src, 0, sizeof(src));
 
   config.winsize = XD3_DEFAULT_WINSIZE;
   xd3_config_stream(&stream, &config);
@@ -261,6 +263,7 @@ cleanup:
     fclose(ftarget);
   }
 
+  if (PyErr_Occurred()) return NULL;
   Py_RETURN_NONE;
 }
 

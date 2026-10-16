@@ -35,14 +35,16 @@ class ProgressBar(threading.Thread):
             timestamp = time()
             while not self.completed and (time() - timestamp) < 1:
                 try:
-                    dl, dec = self.speed_queue.get(timeout=1)
+                    dl, dec = self.speed_queue.get_nowait()
                     self.downloaded_since_last_update += dl
+                    self.downloaded += dl
                     self.decompressed_since_last_update += dec
                 except queue.Empty:
                     pass
                 try:
-                    wr, r = self.write_queue.get(timeout=1)
+                    wr, r = self.write_queue.get_nowait()
                     self.written_since_last_update += wr
+                    self.written_total += wr
                     self.read_since_last_update += r
                 except queue.Empty:
                     pass
@@ -101,12 +103,3 @@ class ProgressBar(threading.Thread):
         )
 
         self.last_update = time()
-
-    def update_downloaded_size(self, addition):
-        self.downloaded += addition
-
-    def update_decompressed_size(self, addition):
-        self.decompressed += addition
-
-    def update_bytes_written(self, addition):
-        self.written_total += addition
