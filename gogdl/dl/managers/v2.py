@@ -1,17 +1,17 @@
 # Handle newer depots download
 # This was introduced in GOG Galaxy 2.0, it features compression and files split by chunks
-import json
-from sys import exit
-from gogdl.dl import dl_utils
-import gogdl.dl.objects.v2 as v2
 import hashlib
+import json
+import logging
+import os
+from sys import exit
+
+import gogdl.dl.objects.v2 as v2
+from gogdl import constants
+from gogdl.dl import dl_utils
 from gogdl.dl.managers import dependencies
 from gogdl.dl.managers.task_executor import ExecutingManager
-from gogdl.dl.workers import task_executor
 from gogdl.languages import Language
-from gogdl import constants
-import os
-import logging
 
 
 class Manager:

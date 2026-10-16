@@ -1,16 +1,15 @@
 # Handle old games downloading via V1 depot system
 # V1 is there since GOG 1.0 days, it has no compression and relies on downloading chunks from big main.bin file
 import hashlib
-from sys import exit
-import os 
-import logging
 import json
-from typing import Union
+import logging
+import os
+from sys import exit
+
 from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.managers.dependencies import DependenciesManager
 from gogdl.dl.managers.task_executor import ExecutingManager
-from gogdl.dl.workers.task_executor import DownloadTask1, DownloadTask2, WriterTask
 from gogdl.dl.objects import v1
 from gogdl.languages import Language
 

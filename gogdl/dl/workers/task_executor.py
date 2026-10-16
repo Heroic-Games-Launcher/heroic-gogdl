@@ -1,23 +1,25 @@
-from multiprocessing.shared_memory import SharedMemory
-import os
-from queue import Empty
-import shutil
-import sys
-import stat
-import traceback
-import time
-import requests
-import zlib
 import hashlib
-from io import BytesIO
-from typing import Optional, Union
+import os
+import shutil
+import stat
+import sys
+import time
+import traceback
+import zlib
 from copy import copy
-from gogdl.dl import dl_utils
 from dataclasses import dataclass
 from enum import Enum, auto
+from io import BytesIO
 from multiprocessing import Process, Queue
-from gogdl.dl.objects.generic import MemorySegment, TaskFlag, TerminateWorker
+from multiprocessing.shared_memory import SharedMemory
+from queue import Empty
+from typing import Optional, Union
+
 import gogdl_xdelta3
+import requests
+
+from gogdl.dl import dl_utils
+from gogdl.dl.objects.generic import MemorySegment, TaskFlag, TerminateWorker
 
 
 class FailReason(Enum):
@@ -103,9 +105,9 @@ class Download(Process):
             if isinstance(task, TerminateWorker):
                 break
 
-            if type(task) == DownloadTask2:
+            if isinstance(task, DownloadTask2):
                 self.v2(task)
-            elif type(task) == DownloadTask1:
+            elif isinstance(task, DownloadTask1):
                 self.v1(task)
 
         self.session.close()
@@ -126,7 +128,7 @@ class Download(Process):
         return url
 
     def _get_download_url_v1(self, urls):
-        if type(urls) == str:
+        if isinstance(urls, str):
             url = urls
         else:
             endpoint = copy(urls[0])
@@ -147,7 +149,7 @@ class Download(Process):
         fail_reason = None
         while retries > 0:
             response = None
-            buffer = bytes()
+            buffer = b''
             compressed_sum = hashlib.md5()
             download_size = 0
             decompressor = zlib.decompressobj()
@@ -210,10 +212,10 @@ class Download(Process):
         url = self._get_download_url_v1(urls)
         range_header = dl_utils.get_range_header(task.offset, task.size)
 
-        buffer = bytes()
+        buffer = b''
         while retries > 0:
             response = None
-            buffer = bytes()
+            buffer = b''
             try:
                 response = self.session.get(url, stream=True, timeout=10, headers={'Range': range_header})
                 response.raise_for_status()
@@ -347,13 +349,13 @@ class Writer(Process):
                 if task.flags & TaskFlag.DELETE_FILE and os.path.exists(task_path):
                     try:
                         os.remove(task_path)
-                    except OSError as e:
+                    except OSError:
                         self.results_queue.put(WriterTaskResult(False, task))
                         continue
                 dest = task.old_destination or task.destination
                 try:
                     os.rename(dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file)), task_path)
-                except OSError as e:
+                except OSError:
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
 
@@ -399,7 +401,7 @@ class Writer(Process):
                 try:
                     if os.path.exists(task_path):
                         os.remove(task_path)
-                except OSError as e:
+                except OSError:
                     self.results_queue.put(WriterTaskResult(False, task))
                     continue
 
@@ -412,7 +414,7 @@ class Writer(Process):
                     try:
                         st = os.stat(task_path)
                         os.chmod(task_path, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-                    except Exception as e:
+                    except Exception:
                         self.results_queue.put(WriterTaskResult(False, task))
                         continue
                 self.results_queue.put(WriterTaskResult(True, task))
@@ -458,10 +460,7 @@ class Writer(Process):
                         decompressor = None
                     while left > 0:
                         chunk = old_file_handle.read(min(1024*1024, left))
-                        if decompressor:
-                            data = decompressor.decompress(chunk)
-                        else:
-                            data = chunk
+                        data = decompressor.decompress(chunk) if decompressor else chunk
                         written += file_handle.write(data)
                         self.speed_queue.put((len(data), len(chunk)))
                         left -= len(chunk)
@@ -478,4 +477,3 @@ class Writer(Process):
         
         self.shared_memory.close()
         shutil.rmtree(self.cache, ignore_errors=True)
-

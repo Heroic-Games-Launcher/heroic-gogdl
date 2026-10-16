@@ -1,13 +1,13 @@
+import json
 import logging
 import time
-import requests
-import json
 from multiprocessing import cpu_count
-from gogdl.dl import dl_utils
-from gogdl import version
+
+import requests
+
 import gogdl.constants as constants
 from gogdl import version
-
+from gogdl.dl import dl_utils
 
 
 class ApiHandler:
@@ -66,10 +66,7 @@ class ApiHandler:
         if not self.owned:
             response = self.session.get(f'{constants.GOG_EMBED}/user/data/games')
             self.owned = response.json()['owned']
-        for owned in self.owned:
-            if str(owned) == str(id):
-                return True
-        return False
+        return any(str(owned) == str(id) for owned in self.owned)
 
     def __obtain_secure_link(self, id, path, generation):
         self.endpoints[id] = None
