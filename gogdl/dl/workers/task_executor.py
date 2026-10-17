@@ -147,7 +147,7 @@ class Download(Process):
         fail_reason = None
         while retries > 0:
             response = None
-            buffer = bytes()
+            buffer = bytearray()
             compressed_sum = hashlib.md5()
             download_size = 0
             decompressor = zlib.decompressobj()
@@ -210,10 +210,10 @@ class Download(Process):
         url = self._get_download_url_v1(urls)
         range_header = dl_utils.get_range_header(task.offset, task.size)
 
-        buffer = bytes()
+        buffer = bytearray()
         while retries > 0:
             response = None
-            buffer = bytes()
+            buffer = bytearray()
             try:
                 response = self.session.get(url, stream=True, timeout=10, headers={'Range': range_header})
                 response.raise_for_status()
