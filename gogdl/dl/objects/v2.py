@@ -1,11 +1,12 @@
 import json
 import os
-
+import struct
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
 from gogdl import constants
 from gogdl.languages import Language
 
+SYSTEM_BITNESS = str(struct.calcsize('P') * 8)
 
 class DepotFile:
     def __init__(self, item_data, product_id):
@@ -35,7 +36,7 @@ class Depot:
     def __init__(self, target_lang, depot_data):
         self.target_lang = target_lang
         self.languages = depot_data["languages"]
-        self.bitness = depot_data.get("osBitness")
+        self.bitness = depot_data.get("osBitness", [])
         self.product_id = depot_data["productId"]
         self.compressed_size = depot_data.get("compressedSize") or 0
         self.size = depot_data.get("size") or 0
@@ -51,6 +52,9 @@ class Depot:
             if status:
                 break
         return status
+
+    def check_bitness(self):
+        return len(self.bitness) == 0 or SYSTEM_BITNESS in self.bitness
 
 class Manifest:
     def __init__(self, meta, language, dlcs, api_handler, dlc_only):
@@ -92,7 +96,7 @@ class Manifest:
                 self.all_depots.append(new_depot)
                 
 
-        return list(filter(lambda x: x.check_language(), parsed))
+        return list(filter(lambda x: x.check_language() and x.check_bitness(), parsed))
 
     def list_languages(self):
         languages_dict = set()
