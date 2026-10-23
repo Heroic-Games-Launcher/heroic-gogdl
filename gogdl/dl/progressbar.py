@@ -4,6 +4,8 @@ import threading
 import logging
 from time import sleep, time
 
+IDLE_POLL_INTERVAL = 0.01
+
 
 class ProgressBar(threading.Thread):
     def __init__(self, max_val: int, speed_queue: Queue, write_queue: Queue):
@@ -34,8 +36,10 @@ class ProgressBar(threading.Thread):
             self.written_since_last_update = self.read_since_last_update = 0
             timestamp = time()
             while not self.completed and (time() - timestamp) < 1:
+                received = False
                 try:
                     dl, dec = self.speed_queue.get_nowait()
+                    received = True
                     self.downloaded_since_last_update += dl
                     self.downloaded += dl
                     self.decompressed_since_last_update += dec
@@ -43,12 +47,15 @@ class ProgressBar(threading.Thread):
                     pass
                 try:
                     wr, r = self.write_queue.get_nowait()
+                    received = True
                     self.written_since_last_update += wr
                     self.written_total += wr
                     self.read_since_last_update += r
                 except queue.Empty:
                     pass
-                
+                if not received:
+                    sleep(IDLE_POLL_INTERVAL)
+
         self.print_progressbar()
     def print_progressbar(self):
         percentage = (self.written_total / self.total) * 100
