@@ -1,15 +1,20 @@
 import configparser
-import os
 import json
-import sys
-import subprocess
-import time
-from gogdl.dl.dl_utils import get_case_insensitive_name
-from ctypes import *
-from gogdl.process import Process
-import signal
-import shutil
+import os
 import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+from contextlib import suppress
+from ctypes import cdll
+from typing import Literal
+
+from gogdl.dl.dl_utils import get_case_insensitive_name
+from gogdl.models import InfoEntry, FileTask, URLTask
+from gogdl.process import Process
 
 class NoMoreChildren(Exception):
     pass
@@ -56,7 +61,7 @@ def get_app_bundle_command(id: str) -> list[str]:
     return []
 
 # Supports launching linux builds
-def launch(arguments, unknown_args):
+def launch(arguments, unknown_args: list[str]):
     # print(arguments)
     info = load_game_info(arguments.path, arguments.id, arguments.platform)
 
@@ -66,11 +71,10 @@ def launch(arguments, unknown_args):
     envvars = {}
 
     unified_platform = {"win32": "windows", "darwin": "osx", "linux": "linux"}
-    command = list()
+    command: list[str] = list()
     working_dir = arguments.path
     heroic_exe_wrapper = os.environ.get("HEROIC_GOGDL_WRAPPER_EXE")
-    # If type is a string we know it's a path to start.sh on linux
-    if type(info) != str:
+    if isinstance(info, InfoEntry):
         if sys.platform != "win32":
             if not arguments.dont_use_wine and arguments.platform != unified_platform[sys.platform]:
                 if arguments.wine_prefix:
@@ -78,22 +82,20 @@ def launch(arguments, unknown_args):
                 wrapper.append(arguments.wine)
 
         primary_task = get_preferred_task(info, arguments.preferred_task)
-        launch_arguments = primary_task.get("arguments")
-        compatibility_flags = primary_task.get("compatibilityFlags")
-        executable = os.path.join(arguments.path, primary_task["path"])
-        if arguments.platform == "linux":
-            executable = os.path.join(arguments.path, "game", primary_task["path"])
-        if launch_arguments is None:
-            launch_arguments = []
-        if type(launch_arguments) == str:
-            launch_arguments = launch_arguments.replace('\\', '/')
-            launch_arguments = shlex.split(launch_arguments)
-        if compatibility_flags is None:
-            compatibility_flags = []
+        if not isinstance(primary_task, FileTask):
+            raise RuntimeError(f'Tried to launch a non-FileTask task "{primary_task.name}"')
 
-        relative_working_dir = (
-            primary_task["workingDir"] if primary_task.get("workingDir") else ""
+        launch_arguments: list[str] = (
+            shlex.split(primary_task.arguments.replace('\\', '/'))
+            if primary_task.arguments is not None
+            else []
         )
+
+        executable = os.path.join(arguments.path, primary_task.path)
+        if arguments.platform == "linux":
+            executable = os.path.join(arguments.path, "game", primary_task.path)
+
+        relative_working_dir = primary_task.workingDir
         if sys.platform != "win32":
             relative_working_dir = relative_working_dir.replace("\\", os.sep)
             executable = executable.replace("\\", os.sep)
@@ -106,7 +108,7 @@ def launch(arguments, unknown_args):
             working_dir = get_case_insensitive_name(working_dir)
 
         os.chdir(working_dir)
-        
+
         if sys.platform != "win32" and arguments.platform == 'windows' and not arguments.override_exe:
             if "scummvm.exe" in executable.lower():
                 flatpak_scummvm = get_flatpak_command("org.scummvm.ScummVM")
@@ -114,7 +116,7 @@ def launch(arguments, unknown_args):
                 native_scummvm = shutil.which("scummvm")
                 if native_scummvm:
                     native_scummvm = [native_scummvm]
-            
+
                 native_runner = flatpak_scummvm or bundle_scummvm or native_scummvm
                 if native_runner:
                     wrapper = native_runner
@@ -151,36 +153,23 @@ def launch(arguments, unknown_args):
                 if native_runner:
                     wrapper = native_runner
                     executable = None
-
-        if len(wrapper) > 0 and wrapper[0] is not None:
-            command.extend(wrapper)
-
-        if heroic_exe_wrapper:
-            command.append(heroic_exe_wrapper.strip())
-
-        if arguments.override_exe:
-            command.append(arguments.override_exe)
-            working_dir = os.path.split(arguments.override_exe)[0]
-            if not os.path.exists(working_dir):
-                working_dir = get_case_insensitive_name(working_dir)
-        elif executable:
-            command.append(executable)
-        command.extend(launch_arguments)
     else:
-        if len(wrapper) > 0 and wrapper[0] is not None:
-            command.extend(wrapper)
+        # We have a `str` info -> we're on linux and `info` is the path to `start.sh`
+        executable = info
 
-        if heroic_exe_wrapper:
-            command.append(heroic_exe_wrapper.strip())
+    if len(wrapper) > 0 and wrapper[0] is not None:
+        command.extend(wrapper)
 
-        if arguments.override_exe:
-            command.append(arguments.override_exe)
-            working_dir = os.path.split(arguments.override_exe)[0]
-            # Handle case sensitive file systems
-            if not os.path.exists(working_dir):
-                working_dir = get_case_insensitive_name(working_dir)
-        else:
-            command.append(info)
+    if heroic_exe_wrapper:
+        command.append(heroic_exe_wrapper.strip())
+
+    if arguments.override_exe:
+        command.append(arguments.override_exe)
+        working_dir = os.path.split(arguments.override_exe)[0]
+        if not os.path.exists(working_dir):
+            working_dir = get_case_insensitive_name(working_dir)
+    elif executable:
+        command.append(executable)
 
     os.chdir(working_dir)
     command.extend(unknown_args)
@@ -282,41 +271,32 @@ def launch(arguments, unknown_args):
     sys.exit(status)
 
 
-def get_preferred_task(info, index):
-    primaryTask = None
-    for task in info["playTasks"]:
-        if task.get("isPrimary") == True:
-            primaryTask = task
-            break
-    if index is None:
-        return primaryTask
-    indexI = int(index)
-    if len(info["playTasks"]) > indexI:
-        return info["playTasks"][indexI]
-    
-    return primaryTask
+def get_preferred_task(info: InfoEntry, preferred_index: int | None) -> FileTask | URLTask:
+    # First, try the preferred index
+    if preferred_index is not None:
+        with suppress(IndexError):
+            return info.playTasks[preferred_index]
+    # Then, find the primary one
+    primary_task = next((
+        p for p in info.playTasks if p.isPrimary
+    ), None)
+    if primary_task is not None:
+        return primary_task
+    # If all else fails, return the first one
+    return info.playTasks[0]
 
 
-
-
-def load_game_info(path, id, platform):
+def load_game_info(path, id, platform: Literal['windows', 'osx', 'linux']) -> InfoEntry | str:
     filename = f"goggame-{id}.info"
-    abs_path = (
-        (
-            os.path.join(path, filename)
-            if platform == "windows"
-            else os.path.join(path, "start.sh")
-        )
-        if platform != "osx"
-        else os.path.join(path, "Contents", "Resources", filename)
-    )
+    match platform:
+        case 'windows':
+            abs_path = os.path.join(path, filename)
+        case 'osx':
+            abs_path = os.path.join(path, "Contents", "Resources", filename)
+        case 'linux':
+            # Linux games don't have a .info file. Just return the path to its entry point
+            return os.path.join(path, "start.sh")
     if not os.path.isfile(abs_path):
         sys.exit(1)
-    if platform == "linux":
-        return abs_path
     with open(abs_path) as f:
-        data = f.read()
-        f.close()
-        return json.loads(data)
-
-
+        return InfoEntry.from_dict(json.load(f))
