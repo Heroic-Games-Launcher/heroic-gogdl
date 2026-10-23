@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from enum import Flag, auto
+from pathlib import PurePath
+import os
 from typing import Optional
 
 
@@ -91,3 +93,7 @@ class FileTask:
 @dataclass
 class TerminateWorker:
     pass
+
+class FileExclusion:
+    def matches(file, excludelist):
+        return any(PurePath(file).full_match(pattern) for pattern in excludelist)

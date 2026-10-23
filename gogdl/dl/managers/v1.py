@@ -164,6 +164,8 @@ class Manager:
 
         if self.manifest:
             self.manifest.get_files()
+            self.manifest.exclude_files()
+            
 
         if old_manifest:
             old_manifest.get_files()
