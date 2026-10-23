@@ -317,6 +317,7 @@ class ExecutingManager:
             elif isinstance(f, v2.FileDiff):
                 chunk_tasks = []
                 reused = 0
+                cache_deletes = []
                 file_size = 0
                 support_flag = generic.TaskFlag.SUPPORT if 'support' in f.file.flags else generic.TaskFlag.NONE
                 old_support_flag = generic.TaskFlag.SUPPORT if 'support' in f.old_file_flags else generic.TaskFlag.NONE
@@ -352,7 +353,7 @@ class ExecutingManager:
                         chunk_tasks.append(chunk_task)
                         if is_cached and shared_chunks_counter[chunk["compressedMd5"]] == 0:
                             cached.remove(chunk["md5"])
-                            self.tasks.append(generic.FileTask(os.path.join(self.cache, chunk["md5"]), flags=generic.TaskFlag.DELETE_FILE))
+                            cache_deletes.append(generic.FileTask(os.path.join(self.cache, chunk["md5"]), flags=generic.TaskFlag.DELETE_FILE))
                             current_tmp_size -= chunk['size']
                 current_tmp_size += file_size
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
@@ -366,6 +367,8 @@ class ExecutingManager:
                     self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.OPEN_FILE | support_flag))
                     self.tasks.extend(chunk_tasks)
                     self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.CLOSE_FILE | support_flag))
+                # Delete cached chunks only after the tasks that read them
+                self.tasks.extend(cache_deletes)
                 if 'executable' in f.file.flags:
                     self.tasks.append(generic.FileTask(f.file.path, flags=generic.TaskFlag.MAKE_EXE | support_flag))
                 self.disk_size += file_size
@@ -373,6 +376,7 @@ class ExecutingManager:
             elif isinstance(f, v2.FilePatchDiff):
                 chunk_tasks = []
                 patch_size = 0
+                cache_deletes = []
                 old_file_size = 0
                 out_file_size = 0
                 if f.target.lower() in completed_files:
@@ -409,7 +413,7 @@ class ExecutingManager:
                     chunk_tasks.append(chunk_task)
                     if is_cached and shared_chunks_counter[chunk["compressedMd5"]] == 0:
                         cached.remove(chunk["md5"])
-                        self.tasks.append(generic.FileTask(os.path.join(self.cache, chunk["md5"]), flags=generic.TaskFlag.DELETE_FILE))
+                        cache_deletes.append(generic.FileTask(os.path.join(self.cache, chunk["md5"]), flags=generic.TaskFlag.DELETE_FILE))
                         current_tmp_size -= chunk['size']
 
                 self.disk_size += patch_size
@@ -420,6 +424,7 @@ class ExecutingManager:
                 self.tasks.append(generic.FileTask(f.target + ".delta", flags=generic.TaskFlag.OPEN_FILE))
                 self.tasks.extend(chunk_tasks)
                 self.tasks.append(generic.FileTask(f.target + ".delta", flags=generic.TaskFlag.CLOSE_FILE))
+                self.tasks.extend(cache_deletes)
 
                 current_tmp_size += out_file_size
                 required_disk_size_delta = max(current_tmp_size, required_disk_size_delta)
