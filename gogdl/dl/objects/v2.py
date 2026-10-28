@@ -1,16 +1,17 @@
 import json
 import os
 import struct
+
+from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
-from gogdl import constants
 from gogdl.languages import Language
 
 SYSTEM_BITNESS = str(struct.calcsize('P') * 8)
 
 class DepotFile:
     def __init__(self, item_data, product_id):
-        self.flags = item_data.get("flags") or list()
+        self.flags = item_data.get("flags") or []
         self.path = item_data["path"].replace(constants.NON_NATIVE_SEP, os.sep).lstrip(os.sep)
         if "support" in self.flags:
             self.path = os.path.join(product_id, self.path)
@@ -68,7 +69,7 @@ class Manifest:
         self.depots = self.parse_depots(language, meta["depots"])
         self.dependencies_ids = meta.get("dependencies")
         if not self.dependencies_ids:
-            self.dependencies_ids = list()
+            self.dependencies_ids = []
         self.install_directory = meta["installDirectory"]
 
         self.api_handler = api_handler
@@ -108,11 +109,11 @@ class Manifest:
         return list(languages_dict)
 
     def calculate_download_size(self):
-        data = dict()
+        data = {}
 
         for depot in self.all_depots:
             if depot.product_id not in data:
-                data[depot.product_id] = dict()
+                data[depot.product_id] = {}
                 data[depot.product_id]['*'] = {"download_size": 0, "disk_size": 0}
             product_data = data[depot.product_id]
             
@@ -190,11 +191,11 @@ class ManifestDiff(generic.BaseDiff):
             comparison.new = manifest.files
             return comparison
 
-        new_files = dict()
+        new_files = {}
         for file in manifest.files:
             new_files.update({file.path.lower(): file})
 
-        old_files = dict()
+        old_files = {}
         for file in old_manifest.files:
             old_files.update({file.path.lower(): file})
 
@@ -214,9 +215,8 @@ class ManifestDiff(generic.BaseDiff):
                     if len(new_file.chunks) == 0:
                         continue
                     new_final_sum = new_file.md5 or new_file.chunks[0]["md5"]
-                    if new_final_sum:
-                        if old_file.hash != new_final_sum:
-                            comparison.changed.append(new_file)
+                    if new_final_sum and old_file.hash != new_final_sum:
+                        comparison.changed.append(new_file)
                     continue
 
                 patch_file = None
@@ -236,9 +236,7 @@ class ManifestDiff(generic.BaseDiff):
                     if new_file.chunks[0]["md5"] != old_file.chunks[0]["md5"]:
                         comparison.changed.append(new_file)
                 else:
-                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 and old_file.sha256 != new_file.sha256):
-                        comparison.changed.append(FileDiff.compare(new_file, old_file))
-                    elif len(new_file.chunks) != len(old_file.chunks):
+                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 and old_file.sha256 != new_file.sha256) or len(new_file.chunks) != len(old_file.chunks):
                         comparison.changed.append(FileDiff.compare(new_file, old_file))
         return comparison
 
@@ -270,9 +268,11 @@ class Patch:
         depots = []
         # Get depots we need
         for depot in patch_data['depots']:
-            if depot['productId'] == patch_data['baseProductId'] or depot['productId'] in dlc_ids:
-                if lang in depot['languages']:
-                    depots.append(depot)
+            if (
+                depot['productId'] == patch_data['baseProductId']
+                or depot['productId'] in dlc_ids
+            ) and lang in depot['languages']:
+                depots.append(depot)
 
         if not depots:
             return None

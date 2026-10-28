@@ -1,19 +1,19 @@
 # Manage downloading of linux native games using new zip method based on Range headers
+import hashlib
 import json
 import logging
-import hashlib
 import os.path
 import stat
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from zlib import crc32
+
+from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.managers.task_executor import ExecutingManager
+from gogdl.dl.objects import linux
 from gogdl.dl.objects.generic import BaseDiff
 from gogdl.dl.objects.v2 import DepotLink
-from gogdl.dl.workers import linux as linux_worker
-from gogdl.dl.objects import linux
 from gogdl.languages import Language
-from gogdl import constants
 
 
 def get_folder_name_from_windows_manifest(api_handler, id):
@@ -26,7 +26,7 @@ def get_folder_name_from_windows_manifest(api_handler, id):
         return "UnknownGame"
 
     url = builds["items"][0]["link"]
-    meta, headers = dl_utils.get_zlib_encoded(api_handler, url)
+    meta, _headers = dl_utils.get_zlib_encoded(api_handler, url)
     install_dir = (
         meta["installDirectory"]
         if builds["items"][0]["generation"] == 2
@@ -66,11 +66,11 @@ class Manager:
 
         self.game_data = None
         self.game_installer = {"version": "Unknown"}
-        self.languages_codes = list()
+        self.languages_codes = []
         self.downlink = None
-        self.game_files = list()
+        self.game_files = []
 
-        self.installer_handlers = list()
+        self.installer_handlers = []
 
     @staticmethod
     def filter_linux_installers(installers):
@@ -156,7 +156,7 @@ class Manager:
         return download_size, size
 
     def get_owned_dlcs(self):
-        dlcs = list()
+        dlcs = []
         for dlc in self.game_data["expanded_dlcs"]:
             if self.api_handler.does_user_own(dlc["id"]):
                 if not dlc["downloads"]["installers"]:
@@ -189,7 +189,7 @@ class Manager:
         self.setup()
         manifest_path = os.path.join(self.path, '.gogdl-linux-manifest')
 
-        cd_files = dict()
+        cd_files = {}
         for handler in self.installer_handlers:
             for file in handler.central_directory.files:
                 if not file.file_name.startswith("data/noarch") or file.file_name.endswith("/"):
@@ -201,28 +201,28 @@ class Manager:
             with open(manifest_path, 'r') as f:
                 manifest_data = json.load(f)
 
-        new: list[linux.CentralDirectoryFile] = list()
-        deleted: list[str] = list()
+        new: list[linux.CentralDirectoryFile] = []
+        deleted: list[str] = []
         if manifest_data and not self.is_verifying:
-            manifest_files = dict()
+            manifest_files = {}
             for file in manifest_data['files']:
                 manifest_files.update({file['file_name']: file['crc32']})
 
-            for file_name in manifest_files:
+            for file_name, manifest_crc32 in manifest_files.items():
                 if file_name in cd_files:
-                    if cd_files[file_name].crc32 != manifest_files[file_name]:
+                    if cd_files[file_name].crc32 != manifest_crc32:
                         new.append(cd_files[file_name])
                 else:
                     deleted.append(file_name)
             
-            for file_name in cd_files:
+            for file_name, value in cd_files.items():
                 if file_name not in manifest_files:
-                    new.append(cd_files[file_name])
+                    new.append(value)
 
         else:
             new = list(cd_files.values())
 
-        sources = dict()
+        sources = {}
         for handler in self.installer_handlers:
             sources.update({handler.product: handler.url})
 
@@ -232,7 +232,7 @@ class Manager:
 
         if self.is_verifying:
             self.logger.info("Verifying files")
-            invalid = list()
+            invalid = []
             for file in new:
                 path = file.file_name.replace("data/noarch", self.path)
 
@@ -256,8 +256,8 @@ class Manager:
 
         diff = BaseDiff()
 
-        final_files = list()
-        for i, file in enumerate(new):
+        final_files = []
+        for _i, file in enumerate(new):
             # Prepare file for download
             # Calculate data offsets 
             handler = None
@@ -299,7 +299,7 @@ class Manager:
         if cancelled:
             return
 
-        new_manifest = dict()
+        new_manifest = {}
 
         gameinfo_file = os.path.join(self.path, 'gameinfo')
         if os.path.exists(gameinfo_file):

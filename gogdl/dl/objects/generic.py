@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Flag, auto
-from typing import Optional
 
 
 class BaseDiff:
@@ -53,9 +54,9 @@ class ChunkTask:
     
     cleanup: bool = False
     offload_to_cache: bool = False
-    old_offset: Optional[int] = None
+    old_offset: int | None = None
     old_flags: TaskFlag = TaskFlag.NONE 
-    old_file: Optional[str] = None
+    old_file: str | None = None
 
 @dataclass
 class V1Task:
@@ -64,12 +65,12 @@ class V1Task:
     offset: int
     size: int
     md5: str
-    cleanup: Optional[bool] = True
+    cleanup: bool | None = True
 
-    old_offset: Optional[int] = None
-    offload_to_cache: Optional[bool] = False
+    old_offset: int | None = None
+    offload_to_cache: bool | None = False
     old_flags: TaskFlag = TaskFlag.NONE 
-    old_file: Optional[str] = None
+    old_file: str | None = None
 
     # This isn't actual sum, but unique id of chunk we use to decide 
     # if we should push it to writer
@@ -83,9 +84,9 @@ class FileTask:
     flags: TaskFlag
 
     old_flags: TaskFlag = TaskFlag.NONE 
-    old_file: Optional[str] = None
+    old_file: str | None = None
 
-    patch_file: Optional[str] = None
+    patch_file: str | None = None
 
 
 @dataclass

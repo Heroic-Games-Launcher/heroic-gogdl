@@ -1,15 +1,16 @@
-import os
-import sys
-import logging
-import requests
-import urllib.parse
-import hashlib
 import datetime
 import gzip
+import hashlib
+import logging
+import os
+import sys
+import urllib.parse
 from enum import Enum
 
-import gogdl.dl.dl_utils as dl_utils
-import gogdl.constants as constants
+import requests
+
+from gogdl import constants
+from gogdl.dl import dl_utils
 
 LOCAL_TIMEZONE = datetime.datetime.utcnow().astimezone().tzinfo
 
@@ -38,9 +39,10 @@ class SyncFile:
         date_time_obj = datetime.datetime.fromtimestamp(
             ts, tz=LOCAL_TIMEZONE
         ).astimezone(datetime.timezone.utc)
-        self.md5 = hashlib.md5(
-            gzip.compress(open(self.absolute_path, "rb").read(), 6, mtime=0)
-        ).hexdigest()
+        with open(self.absolute_path, "rb") as file:
+            self.md5 = hashlib.md5(
+                gzip.compress(file.read(), 6, mtime=0)
+            ).hexdigest()
 
         self.update_time = date_time_obj.isoformat(timespec="seconds")
         self.update_ts = date_time_obj.timestamp()
@@ -61,15 +63,15 @@ class CloudStorageManager:
              "X-Object-Meta-User-Agent": "GOGGalaxyCommunicationService/2.0.13.27 (Windows_32bit) dont_sync_marker/true installation_source/gog"}
         )
 
-        self.credentials = dict()
-        self.client_id = str()
-        self.client_secret = str()
+        self.credentials = {}
+        self.client_id = ''
+        self.client_secret = ''
 
     def create_directory_map(self, path: str) -> list:
         """
         Creates list of every file in directory to be synced
         """
-        files = list()
+        files = []
         directory_contents = os.listdir(path)
 
         for content in directory_contents:
@@ -247,7 +249,7 @@ class CloudStorageManager:
         )
         meta_url = builds["items"][0]["link"]
 
-        meta, headers = dl_utils.get_zlib_encoded(self.api, meta_url)
+        meta, _headers = dl_utils.get_zlib_encoded(self.api, meta_url)
         return meta["clientId"], meta["clientSecret"]
 
     def delete_file(self, file: SyncFile):
@@ -259,9 +261,8 @@ class CloudStorageManager:
         self.logger.debug(f"Delete response: {response}")
 
     def upload_file(self, file: SyncFile):
-        compressed_data = gzip.compress(
-            open(file.absolute_path, "rb").read(), 6, mtime=0
-        )
+        with open(file.absolute_path, "rb") as save_file:
+            compressed_data = gzip.compress(save_file.read(), 6, mtime=0)
         headers = {
             "X-Object-Meta-LocalLastModified": f"{file.update_time}",
             "Etag": hashlib.md5(compressed_data).hexdigest(),
@@ -288,7 +289,7 @@ class CloudStorageManager:
                 f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}/{self.cloud_save_dir_name}/{fpath}",
                 stream=True,
             )
-        except:
+        except requests.RequestException:
             if (retries > 1):
                 self.logger.debug(f"Failed sync of {file}, retrying (retries left {retries - 1})")
                 self.download_file(file, retries - 1)
@@ -307,10 +308,9 @@ class CloudStorageManager:
             # if not total:
             #     f.write(response.content)
             total = int(total)
-            for data in response.iter_content(
+            f.writelines(response.iter_content(
                     chunk_size=max(int(total / 1000), 1024 * 1024)
-            ):
-                f.write(data)
+            ))
 
         try:
             f_timestamp = (
@@ -323,7 +323,6 @@ class CloudStorageManager:
             os.utime(file.absolute_path, (f_timestamp, f_timestamp))
         except (ValueError, TypeError):
             self.logger.warning(f"Incorrect LastModified header for file {file.relative_path} {response.headers.get('X-Object-Meta-LocalLastModified')} ; Ignoring...")
-            pass 
 
     def commit_changes(self):
         response = self.session.post(f"{constants.GOG_CLOUDSTORAGE}/v1/{self.credentials['user_id']}/{self.client_id}")
@@ -335,11 +334,11 @@ class CloudStorageManager:
 class SyncClassifier:
     def __init__(self):
         self.action = None
-        self.updated_local = list()
-        self.updated_cloud = list()
+        self.updated_local = []
+        self.updated_cloud = []
 
-        self.not_existing_locally = list()
-        self.not_existing_remotely = list()
+        self.not_existing_locally = []
+        self.not_existing_remotely = []
 
     def get_action(self):
         if len(self.updated_local) == 0 and len(self.updated_cloud) > 0:

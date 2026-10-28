@@ -1,16 +1,22 @@
+import json
+import logging
+import os
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from sys import exit
-import os
-import logging
-import json
 
 from gogdl import constants
 from gogdl.dl.managers import linux, v1, v2
 
+
 @dataclass
 class UnsupportedPlatform(Exception):
     pass
+
+
+class UnsupportedDepotVersion(Exception):
+    pass
+
 
 class Manager:
     def __init__(self, arguments, unknown_arguments, api_handler):
@@ -102,7 +108,7 @@ class Manager:
         self.target_build = self.builds["items"][0]
 
         for build in self.builds["items"]:
-            if build["branch"] == None:
+            if build["branch"] is None:
                 self.target_build = build
                 break
 
@@ -131,7 +137,7 @@ class Manager:
         # This code shouldn't run at all but it's here just in case GOG decides they will return different generation than requested one
         # Of course assuming they will ever change their content system generation (I highly doubt they will)
         if generation not in [1, 2]:
-            raise Exception("Unsupported depot version please report this")
+            raise UnsupportedDepotVersion("Unsupported depot version please report this")
 
         self.logger.info(f"Depot version: {generation}")
 

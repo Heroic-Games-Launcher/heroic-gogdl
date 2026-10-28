@@ -1,18 +1,25 @@
 # Handle old games downloading via V1 depot system
 # V1 is there since GOG 1.0 days, it has no compression and relies on downloading chunks from big main.bin file
 import hashlib
-from sys import exit
-import os 
-import logging
 import json
-from typing import Union
+import logging
+import os
+from sys import exit
+
 from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.managers.dependencies import DependenciesManager
 from gogdl.dl.managers.task_executor import ExecutingManager
-from gogdl.dl.workers.task_executor import DownloadTask1, DownloadTask2, WriterTask
 from gogdl.dl.objects import v1
 from gogdl.languages import Language
+
+
+class MetaUnavailable(Exception):
+    pass
+
+
+class ManifestUnavailable(Exception):
+    pass
 
 
 class Manager:
@@ -47,7 +54,7 @@ class Manager:
             self.dlcs_list = self.arguments.dlcs_list.split(",")
 
         else:
-            self.dlcs_list = list()
+            self.dlcs_list = []
         
         self.dlc_only = self.arguments.dlc_only
 
@@ -62,7 +69,7 @@ class Manager:
         meta_url = self.build["link"]
         self.meta, headers = dl_utils.get_zlib_encoded(self.api_handler, meta_url)
         if not self.meta:
-            raise Exception("There was an error obtaining meta")
+            raise MetaUnavailable("There was an error obtaining meta")
         if headers:
             self.version_etag = headers.get("Etag")
 
@@ -81,12 +88,14 @@ class Manager:
         size_data = self.manifest.calculate_download_size()
 
         for depot in repository["depots"]:
-            if depot["dependencyId"] in self.manifest.dependencies_ids:
-                if not depot["executable"]["path"].startswith("__redist"):
-                    size_data[self.game_id]['*']["download_size"] += depot.get("compressedSize") or 0
-                    size_data[self.game_id]['*']["disk_size"] += depot.get("size") or 0
+            if (
+                depot["dependencyId"] in self.manifest.dependencies_ids
+                and not depot["executable"]["path"].startswith("__redist")
+            ):
+                size_data[self.game_id]['*']["download_size"] += depot.get("compressedSize") or 0
+                size_data[self.game_id]['*']["disk_size"] += depot.get("size") or 0
 
-        available_branches = set([build["branch"] for build in self.builds["items"] if build["branch"]])
+        available_branches = {build["branch"] for build in self.builds["items"] if build["branch"]}
         available_branches_list = [None] + list(available_branches)
 
         for dlc in dlcs:
@@ -108,7 +117,7 @@ class Manager:
 
     def get_dlcs_user_owns(self, info_command=False, requested_dlcs=None):
         if requested_dlcs is None:
-            requested_dlcs = list()
+            requested_dlcs = []
         if not self.dlcs_should_be_downloaded and not info_command:
             return []
         self.logger.debug("Getting dlcs user owns")
@@ -143,7 +152,6 @@ class Manager:
                     old_manifest = dl_utils.create_manifest_class(json_data, self.api_handler)
                 except json.JSONDecodeError:
                     old_manifest = None
-                    pass
 
         if self.is_verifying:
             if old_manifest:
@@ -151,7 +159,7 @@ class Manager:
                 old_manifest = None
                 dlcs_user_owns = self.manifest.dlcs or []
             else:
-                raise Exception("No manifest stored locally, unable to verify")
+                raise ManifestUnavailable("No manifest stored locally, unable to verify")
         else:
             self.get_meta()
             dlcs_user_owns = self.get_dlcs_user_owns(requested_dlcs=self.dlcs_list)
@@ -178,7 +186,7 @@ class Manager:
         secure_link_endpoints_ids = [product["id"] for product in dlcs_user_owns]
         if not self.dlc_only:
             secure_link_endpoints_ids.append(self.game_id)
-        secure_links = dict()
+        secure_links = {}
         for product_id in secure_link_endpoints_ids:
             secure_links.update(
                 {
@@ -288,4 +296,3 @@ class Manager:
             with open(manifest_path, 'w') as f_handle:
                 data = self.manifest.serialize_to_json()
                 f_handle.write(data)
-

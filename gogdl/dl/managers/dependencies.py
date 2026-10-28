@@ -1,17 +1,19 @@
-from sys import exit
+from __future__ import annotations
+
+import json
 import logging
 import os
-import json
-from typing import Optional
+from sys import exit
+
+from gogdl import constants
 from gogdl.dl import dl_utils
-import gogdl.constants as constants
 from gogdl.dl.managers.task_executor import ExecutingManager
 from gogdl.dl.objects import v2
 from gogdl.dl.objects.generic import BaseDiff
 
 
 def get_depot_list(manifest, product_id=None):
-    download_list = list()
+    download_list = []
     for item in manifest["depot"]["items"]:
         if item["type"] == "DepotFile":
             download_list.append(v2.DepotFile(item, product_id))
@@ -61,9 +63,8 @@ class DependenciesManager:
             try:
                 with open(self.installed_manifest, 'r') as f:
                     existing_manifest = json.load(f)
-            except Exception:
+            except (OSError, TypeError, json.JSONDecodeError):
                 existing_manifest = None
-                pass
             else:
                 if 'depots' in existing_manifest and 'build_id' in existing_manifest:
                     already_installed = existing_manifest.get('HGLInstalled') or []
@@ -131,18 +132,18 @@ class DependenciesDiff(BaseDiff):
         super().__init__()
 
     @classmethod
-    def compare(cls, new_files: list, old_files: Optional[list]):
+    def compare(cls, new_files: list, old_files: list | None):
         comparison = cls()
         
         if not old_files:
             comparison.new = new_files
             return comparison
 
-        new_files_paths = dict()
+        new_files_paths = {}
         for file in new_files:
             new_files_paths.update({file.path.lower(): file})
 
-        old_files_paths = dict()
+        old_files_paths = {}
         for file in old_files:
             old_files_paths.update({file.path.lower(): file})
         
@@ -159,9 +160,6 @@ class DependenciesDiff(BaseDiff):
                     if new_file.chunks[0]["md5"] != old_file.chunks[0]["md5"]:
                         comparison.changed.append(new_file)
                 else:
-                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 != new_file.sha256):
-                        comparison.changed.append(v2.FileDiff.compare(new_file, old_file))
-                    elif len(new_file.chunks) != len(old_file.chunks):
+                    if (new_file.md5 and old_file.md5 and new_file.md5 != old_file.md5) or (new_file.sha256 and old_file.sha256 != new_file.sha256) or len(new_file.chunks) != len(old_file.chunks):
                         comparison.changed.append(v2.FileDiff.compare(new_file, old_file))
         return comparison 
-

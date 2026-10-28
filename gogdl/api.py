@@ -1,13 +1,12 @@
+import json
 import logging
 import time
-import requests
-import json
 from multiprocessing import cpu_count
-from gogdl.dl import dl_utils
-from gogdl import version
-import gogdl.constants as constants
-from gogdl import version
 
+import requests
+
+from gogdl import constants, version
+from gogdl.dl import dl_utils
 
 
 class ApiHandler:
@@ -26,8 +25,8 @@ class ApiHandler:
             self.session.headers["Authorization"] = f"Bearer {token}"
         self.owned = []
 
-        self.endpoints = dict()  # Map of secure link endpoints
-        self.working_on_ids = list()  # List of products we are waiting for to complete getting the secure link
+        self.endpoints = {}  # Map of secure link endpoints
+        self.working_on_ids = []  # List of products we are waiting for to complete getting the secure link
 
     def get_item_data(self, id, expanded=None):
         if expanded is None:
@@ -66,15 +65,11 @@ class ApiHandler:
         if not self.owned:
             response = self.session.get(f'{constants.GOG_EMBED}/user/data/games')
             self.owned = response.json()['owned']
-        for owned in self.owned:
-            if str(owned) == str(id):
-                return True
-        return False
+        return any(str(owned) == str(id) for owned in self.owned)
 
     def __obtain_secure_link(self, id, path, generation):
         self.endpoints[id] = None
-        if self.auth_manager.is_credential_expired():
-            if self.auth_manager.refresh_credentials():
+        if self.auth_manager.is_credential_expired() and self.auth_manager.refresh_credentials():
                 credentials = self.auth_manager.get_credentials()
                 token = credentials["access_token"]
                 self.session.headers["Authorization"] = f"Bearer {token}"

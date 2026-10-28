@@ -2,8 +2,8 @@
 
 import os
 import sys
-import zlib
 import zipfile
+import zlib
 
 cache_path = os.path.join(
         os.getenv("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), 'heroic_gogdl'
@@ -27,4 +27,5 @@ if zipfile.is_zipfile(os.path.dirname(__file__)):
     sys.path.insert(0, vendored_packages_path)
 
 import gogdl.cli
+
 gogdl.cli.main()

@@ -1,15 +1,20 @@
+from __future__ import annotations
+
 import configparser
-import os
+import contextlib
 import json
-import sys
-import subprocess
-import time
-from gogdl.dl.dl_utils import get_case_insensitive_name
-from ctypes import *
-from gogdl.process import Process
-import signal
-import shutil
+import os
 import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from ctypes import cdll
+
+from gogdl.dl.dl_utils import get_case_insensitive_name
+from gogdl.process import Process
+
 
 class NoMoreChildren(Exception):
     pass
@@ -21,7 +26,7 @@ def get_flatpak_command(id: str) -> list[str]:
     process_command = ["flatpak", "info", id] 
     if os.path.exists("/.flatpak-info"):
         try:
-            spawn_test = subprocess.run(["flatpak-spawn", "--host", "ls"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            spawn_test = subprocess.run(["flatpak-spawn", "--host", "ls"], check=False, capture_output=True)
         except FileNotFoundError:
             return []
         if spawn_test.returncode != 0:
@@ -31,7 +36,7 @@ def get_flatpak_command(id: str) -> list[str]:
         process_command = new_process_command + process_command
 
     try:
-        output = subprocess.run(process_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output = subprocess.run(process_command, check=False, capture_output=True)
 
         if output.returncode == 0:
             return new_process_command + ["flatpak", "run", id]
@@ -44,10 +49,10 @@ def get_app_bundle_command(id: str) -> list[str]:
     if sys.platform != "darwin":
         return []
     try:
-        p = subprocess.run(["mdfind", "kMDItemCFBundleIdentifier==", id], stdout=subprocess.PIPE, stderr=None)
+        p = subprocess.run(["mdfind", "kMDItemCFBundleIdentifier==", id], check=False, stdout=subprocess.PIPE, stderr=None)
         if len(p.stdout) > 0:
             bundle = p.stdout.split(b"\n")[0].decode("utf-8")
-            p = subprocess.run(["defaults", "read", bundle + "/Contents/Info.plist", "CFBundleExecutable"], stdout=subprocess.PIPE, stderr=None)
+            p = subprocess.run(["defaults", "read", bundle + "/Contents/Info.plist", "CFBundleExecutable"], check=False, stdout=subprocess.PIPE, stderr=None)
             if len(p.stdout) > 0:
                 bin = p.stdout.split(b"\n")[0].decode("utf-8")
                 return [bundle + "/Contents/MacOS/" + bin]
@@ -66,11 +71,11 @@ def launch(arguments, unknown_args):
     envvars = {}
 
     unified_platform = {"win32": "windows", "darwin": "osx", "linux": "linux"}
-    command = list()
+    command = []
     working_dir = arguments.path
     heroic_exe_wrapper = os.environ.get("HEROIC_GOGDL_WRAPPER_EXE")
     # If type is a string we know it's a path to start.sh on linux
-    if type(info) != str:
+    if not isinstance(info, str):
         if sys.platform != "win32":
             if not arguments.dont_use_wine and arguments.platform != unified_platform[sys.platform]:
                 if arguments.wine_prefix:
@@ -85,7 +90,7 @@ def launch(arguments, unknown_args):
             executable = os.path.join(arguments.path, "game", primary_task["path"])
         if launch_arguments is None:
             launch_arguments = []
-        if type(launch_arguments) == str:
+        if isinstance(launch_arguments, str):
             launch_arguments = launch_arguments.replace('\\', '/')
             launch_arguments = shlex.split(launch_arguments)
         if compatibility_flags is None:
@@ -192,10 +197,8 @@ def launch(arguments, unknown_args):
         ld_library = environment.get("LD_LIBRARY_PATH")
         if ld_library:
             splitted = ld_library.split(":")
-            try:
+            with contextlib.suppress(ValueError):
                 splitted.remove(bundle_dir)
-            except ValueError:
-                pass
             environment.update({"LD_LIBRARY_PATH": ":".join(splitted)})
     
     print("Launch command:", command, flush=True)
@@ -223,10 +226,8 @@ def launch(arguments, unknown_args):
         def hard_sig_handler(signum, _frame):
             for _ in range(3):  # just in case we race a new process.
                 for child in Process(os.getpid()).iter_children():
-                    try:
+                    with contextlib.suppress(ProcessLookupError):
                         os.kill(child.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
 
 
         def sig_handler(signum, _frame):
@@ -234,10 +235,8 @@ def launch(arguments, unknown_args):
             signal.signal(signal.SIGINT, hard_sig_handler)
             for _ in range(3):  # just in case we race a new process.
                 for child in Process(os.getpid()).iter_children():
-                    try:
+                    with contextlib.suppress(ProcessLookupError):
                         os.kill(child.pid, signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
 
         def is_alive():
             return next(iterate_processes(), None) is not None
@@ -285,7 +284,7 @@ def launch(arguments, unknown_args):
 def get_preferred_task(info, index):
     primaryTask = None
     for task in info["playTasks"]:
-        if task.get("isPrimary") == True:
+        if task.get("isPrimary"):
             primaryTask = task
             break
     if index is None:
