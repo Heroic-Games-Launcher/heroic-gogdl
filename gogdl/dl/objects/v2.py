@@ -5,6 +5,7 @@ import struct
 from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
+from gogdl.dl.objects.generic import FileExclusion
 from gogdl.languages import Language
 
 SYSTEM_BITNESS = str(struct.calcsize('P') * 8)
@@ -143,6 +144,16 @@ class Manifest:
                     self.files.append(DepotLink(item))
                 else:
                     self.dirs.append(DepotDirectory(item))
+
+    def exclude_files(self):
+        try:
+            with open(os.path.join(constants.CONFIG_DIR, "exclude", self.product_id), "r") as f:
+                exclude_list = [line.strip().lower() for line in f if line.strip()]
+                exclude_list = [pattern.replace(constants.NON_NATIVE_SEP, os.sep) for pattern in exclude_list]
+        except Exception:
+            return
+        self.files = [file for file in self.files if not FileExclusion.matches(file.path.lower(), exclude_list)]
+
 
 class FileDiff:
     def __init__(self):

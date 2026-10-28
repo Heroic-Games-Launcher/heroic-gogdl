@@ -4,6 +4,7 @@ import os
 from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v2
+from gogdl.dl.objects.generic import FileExclusion
 from gogdl.languages import Language
 
 
@@ -133,6 +134,15 @@ class Manifest:
                     self.dirs.append(Directory(record)) 
                 else:
                     self.files.append(File(record, depot.game_ids[0]))
+
+    def exclude_files(self):
+        try:
+            with open(os.path.join(constants.CONFIG_DIR, "exclude", self.product_id), "r") as f:
+                exclude_list = [line.strip().lower() for line in f if line.strip()]
+                exclude_list = [pattern.replace('/', os.sep) for pattern in exclude_list]
+        except Exception:
+            return
+        self.files = [file for file in self.files if not FileExclusion.matches(file.path.lower(), exclude_list)]
 
 class ManifestDiff(generic.BaseDiff):
     def __init__(self):
