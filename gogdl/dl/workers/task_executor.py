@@ -106,9 +106,9 @@ class Download(Process):
             if isinstance(task, TerminateWorker):
                 break
 
-            if type(task) == DownloadTask2:
+            if isinstance(task, DownloadTask2):
                 self.v2(task)
-            elif type(task) == DownloadTask1:
+            elif isinstance(task, DownloadTask1):
                 self.v1(task)
 
         self.session.close()
@@ -129,7 +129,7 @@ class Download(Process):
         return url
 
     def _get_download_url_v1(self, urls):
-        if type(urls) == str:
+        if isinstance(urls, str):
             url = urls
         else:
             endpoint = copy(urls[0])

@@ -19,7 +19,7 @@ class Language:
             return (
                 value.lower() == self.code.lower()
                 or value.lower() == self.name.lower()
-                or value.lower() in [l.lower() for l in self.deprecated_codes]
+                or value.lower() in [langcode.lower() for langcode in self.deprecated_codes]
             )
         return NotImplemented
 

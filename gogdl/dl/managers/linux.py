@@ -257,7 +257,7 @@ class Manager:
         diff = BaseDiff()
 
         final_files = []
-        for i, file in enumerate(new):
+        for _i, file in enumerate(new):
             # Prepare file for download
             # Calculate data offsets 
             handler = None

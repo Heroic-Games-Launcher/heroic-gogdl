@@ -155,7 +155,7 @@ def get_case_insensitive_name(path):
     while not os.path.exists(root):
         root = os.path.split(root)[0]
     
-    if not root[len(root) - 1] in ["/", "\\"]:
+    if root[len(root) - 1] not in ["/", "\\"]:
         root = root + os.sep
     # Separate unknown path from existing one
     s_working_dir = path.replace(root, "").split(os.sep)

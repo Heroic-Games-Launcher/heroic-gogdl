@@ -108,7 +108,7 @@ class Manager:
         self.target_build = self.builds["items"][0]
 
         for build in self.builds["items"]:
-            if build["branch"] == None:
+            if build["branch"] is None:
                 self.target_build = build
                 break
 

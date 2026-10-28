@@ -114,7 +114,7 @@ class ExecutingManager:
                 first_chunk_checksum = f.chunks[0]['md5'] if len(f.chunks) else None
                 checksum = f.md5 or f.sha256 or first_chunk_checksum
                 self.hash_map.update({f.path.lower(): checksum})
-                for i, chunk in enumerate(f.chunks):
+                for _i, chunk in enumerate(f.chunks):
                     shared_chunks_counter[chunk["compressedMd5"]] += 1
                     self.biggest_chunk = max(self.biggest_chunk, chunk["size"])
 
@@ -122,7 +122,7 @@ class ExecutingManager:
                 first_chunk_checksum = f.file.chunks[0]['md5'] if len(f.file.chunks) else None
                 checksum = f.file.md5 or f.file.sha256 or first_chunk_checksum
                 self.hash_map.update({f.file.path.lower(): checksum})
-                for i, chunk in enumerate(f.file.chunks):
+                for _i, chunk in enumerate(f.file.chunks):
                     if chunk.get("old_offset") is None:
                         shared_chunks_counter[chunk["compressedMd5"]] += 1
                         self.biggest_chunk = max(self.biggest_chunk, chunk["size"])

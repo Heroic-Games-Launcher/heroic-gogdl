@@ -158,7 +158,7 @@ class ManifestDiff(generic.BaseDiff):
             if not new_files.get(old_file.path.lower()):
                 comparison.deleted.append(old_file)
         
-        if type(old_manifest) == v2.Manifest:
+        if isinstance(old_manifest, v2.Manifest):
             comparison.new = new_manifest.files
             return comparison
     
