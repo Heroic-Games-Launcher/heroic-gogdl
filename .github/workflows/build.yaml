@@ -28,11 +28,13 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install pyinstaller and dependencies
-        run: pip3 install --upgrade pyinstaller requests
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
-      - name: Build C module
-        run: pip3 install -e . 
+      - name: Install pyinstaller and dependencies
+        run: uv sync --extra pyinstaller_build --no-install-local
 
       - name: Set strip on Linux and Mac
         id: strip
@@ -49,7 +51,7 @@ jobs:
         if: runner.os == 'Windows'
 
       - name: Build
-        run: pyinstaller
+        run: uv run --module PyInstaller
           --onefile
           --name gogdl
           ${{ steps.strip.outputs.option }}
@@ -76,9 +78,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
       
       - name: Install gogdl into zipapp dir
-        run: pip3 install . --target build 
+        run: uv export --format requirements.txt --no-editable --no-dev | uv pip install --requirement - --target build
       
       - run: mkdir -p dist
 
