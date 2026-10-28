@@ -11,10 +11,9 @@ from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.managers.task_executor import ExecutingManager
 from gogdl.dl.objects import linux
-from gogdl.dl.objects.generic import BaseDiff
+from gogdl.dl.objects.generic import BaseDiff, FileExclusion
 from gogdl.dl.objects.v2 import DepotLink
 from gogdl.languages import Language
-from gogdl.dl.objects.generic import FileExclusion
 
 
 def get_folder_name_from_windows_manifest(api_handler, id):

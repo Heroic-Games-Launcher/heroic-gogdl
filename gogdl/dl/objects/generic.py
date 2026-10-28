@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Flag, auto
 from pathlib import PurePath
-import os
 
 
 class BaseDiff:

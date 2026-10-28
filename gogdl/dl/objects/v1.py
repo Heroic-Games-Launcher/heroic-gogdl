@@ -4,8 +4,8 @@ import os
 from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v2
-from gogdl.languages import Language
 from gogdl.dl.objects.generic import FileExclusion
+from gogdl.languages import Language
 
 
 class Depot:

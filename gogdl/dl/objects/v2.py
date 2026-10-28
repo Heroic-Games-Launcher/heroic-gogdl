@@ -1,4 +1,3 @@
-from fnmatch import fnmatch
 import json
 import os
 import struct
@@ -6,8 +5,8 @@ import struct
 from gogdl import constants
 from gogdl.dl import dl_utils
 from gogdl.dl.objects import generic, v1
-from gogdl.languages import Language
 from gogdl.dl.objects.generic import FileExclusion
+from gogdl.languages import Language
 
 SYSTEM_BITNESS = str(struct.calcsize('P') * 8)
 
