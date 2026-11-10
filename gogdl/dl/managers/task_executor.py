@@ -5,8 +5,8 @@ import os
 import signal
 import time
 from collections import Counter, deque
+from multiprocessing import Event, Queue
 from multiprocessing import Manager as ProcessingManager
-from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
 from queue import Empty, Full
 from sys import exit
@@ -471,7 +471,8 @@ class ExecutingManager:
         try:
             self.threads.append(Thread(target=self.download_manager, args=(self.task_cond, self.shm_cond)))
             self.threads.append(Thread(target=self.process_task_results, args=(self.task_cond,)))
-            self.threads.append(Thread(target=self.process_writer_task_results, args=(self.shm_cond,)))
+            self.writer_results = Thread(target=self.process_writer_task_results, args=(self.shm_cond,))
+            self.threads.append(self.writer_results)
             self.progress = ProgressBar(self.disk_size, self.download_speed_updates, self.writer_speed_updates)
 
             # Spawn workers 
@@ -480,7 +481,8 @@ class ExecutingManager:
                 worker.start()
                 self.download_workers.append(worker)
         
-            self.writer_worker = task_executor.Writer(self.shared_memory.name, self.writer_queue, self.writer_res_queue, self.writer_speed_updates, self.cache)
+            self.writer_stop = Event()
+            self.writer_worker = task_executor.Writer(self.shared_memory.name, self.writer_queue, self.writer_res_queue, self.writer_speed_updates, self.cache, self.writer_stop)
             self.writer_worker.start()
 
             [th.start() for th in self.threads]
@@ -493,15 +495,20 @@ class ExecutingManager:
 
             while self.processed_items < self.items_to_complete and not interrupted and not self.fatal_error:
                 time.sleep(1)
+                # A writer that dies without reporting (e.g. an uncaught exception) would otherwise leave us waiting forever
+                if not self.writer_worker.is_alive():
+                    self.logger.fatal("Writer process exited unexpectedly")
+                    self.fatal_error = True
             if interrupted:
                 return True
         except KeyboardInterrupt:
             return True
         
         self.shutdown()
-        if not self.fatal_error:
-            self.remove_empty_dirs()
-        return self.fatal_error
+        if self.fatal_error:
+            exit(1)
+        self.remove_empty_dirs()
+        return False
 
     def remove_empty_dirs(self):
         # Directories that only contained deleted files would otherwise stay on disk.
@@ -523,6 +530,13 @@ class ExecutingManager:
 
     def interrupt_shutdown(self):
         self.progress.completed = True
+        # Stop the writer between tasks and record everything it finished, otherwise a resume redoes completed files
+        self.writer_stop.set()
+        self.writer_worker.join(timeout=5.0)
+        if self.writer_worker.exitcode is None:
+            self.writer_worker.terminate()
+        self.writer_res_queue.put(task_executor.WriterTaskResult(True, generic.TerminateWorker()))
+        self.writer_results.join(timeout=5.0)
         self.running = False
             
         with self.task_cond:
@@ -548,7 +562,7 @@ class ExecutingManager:
                     _ = queue.get_nowait()
             except Empty:
                 queue.close()
-                queue.join_thread()
+                queue.cancel_join_thread()
 
         self.shared_memory.close()
         self.shared_memory.unlink()
@@ -582,7 +596,13 @@ class ExecutingManager:
                 self.logger.warning("Forcefully terminating download workers")
                 worker.terminate()
         self.writer_worker.join(timeout=10)
-        
+        if self.writer_worker.is_alive():
+            self.logger.warning("Forcefully terminating writer worker")
+            self.writer_worker.terminate()
+        # Nothing reads these anymore, unsent items must not block interpreter exit
+        self.download_queue.cancel_join_thread()
+        self.writer_queue.cancel_join_thread()
+
         self.writer_queue.close()
         self.writer_res_queue.close()
         self.download_queue.close()
@@ -606,7 +626,8 @@ class ExecutingManager:
         self.manager.shutdown()
 
         try:
-            if os.path.exists(self.resume_file):
+            # Kept after a failure so a retry skips files that were already updated
+            if not self.fatal_error and os.path.exists(self.resume_file):
                 os.remove(self.resume_file)
         except OSError:
             self.logger.error("Failed to remove resume file")
@@ -779,29 +800,12 @@ class ExecutingManager:
                 if isinstance(res.task, generic.TerminateWorker):
                     break
                 
-                if res.success and res.task.flags & generic.TaskFlag.CLOSE_FILE and not res.task.file_path.endswith('.delta'):
-                    if res.task.file_path.endswith('.tmp'):
-                        res.task.file_path = res.task.file_path[:-4]
-                        
+                # A file is complete once it is at its final path: renamed from .tmp, or closed after an in-place write
+                in_place = res.task.flags & generic.TaskFlag.CLOSE_FILE and not res.task.file_path.endswith(('.tmp', '.delta'))
+                if res.success and (in_place or res.task.flags & generic.TaskFlag.RENAME_FILE):
                     checksum = self.hash_map.get(res.task.file_path.lower())
                     if not checksum:
-                        self.logger.warning(f"No checksum for closed file, unable to push to resume file {res.task.file_path}")
-                    else:
-                        if res.task.flags & generic.TaskFlag.SUPPORT:
-                            support = "support"
-                        else:
-                            support = ""
-
-                        with open(self.resume_file, 'a') as f:
-                            f.write(f"{checksum}:{support}:{res.task.file_path}\n")
-
-                if res.success and res.task.flags & generic.TaskFlag.PATCH:
-                    if res.task.file_path.endswith('.tmp'):
-                        res.task.file_path = res.task.file_path[:-4]
-
-                    checksum = self.hash_map.get(res.task.file_path.lower())
-                    if not checksum:
-                        self.logger.warning(f"No checksum for patched file, unable to push to resume file {res.task.file_path}")
+                        self.logger.warning(f"No checksum for completed file, unable to push to resume file {res.task.file_path}")
                     else:
                         if res.task.flags & generic.TaskFlag.SUPPORT:
                             support = "support"

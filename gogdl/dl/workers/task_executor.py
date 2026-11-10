@@ -254,20 +254,26 @@ class Download(Process):
         self.results_queue.put(DownloadTaskResult(True, None, task, download_size=download_size, decompressed_size=download_size))
 
 class Writer(Process):
-    def __init__(self, shared_memory, writer_queue, results_queue, speed_queue, cache):
+    def __init__(self, shared_memory, writer_queue, results_queue, speed_queue, cache, stop_event):
         self.shared_memory = SharedMemory(name=shared_memory)
         self.cache = cache
         self.writer_queue: Queue = writer_queue
         self.results_queue: Queue = results_queue
         self.speed_queue: Queue = speed_queue
         self.early_exit = False
+        self.stop_event = stop_event
         super().__init__()
+
+    def fail(self, task):
+        # Stop at the first failure: later tasks (e.g. renaming a half-written .tmp) would damage the install
+        self.results_queue.put(WriterTaskResult(False, task))
+        self.early_exit = True
 
     def run(self):
         file_handle = None
         current_file = ''
 
-        while not self.early_exit:
+        while not self.early_exit and not self.stop_event.is_set():
             try:
                 task: WriterTask | TerminateWorker = self.writer_queue.get(timeout=2)
             except Empty:
@@ -323,7 +329,7 @@ class Writer(Process):
 
                 if not task.old_file:
                     # if this ever happens....
-                    self.results_queue.put(WriterTaskResult(False, task))
+                    self.fail(task)
                     continue
 
                 dest = task.old_destination or task.destination
@@ -332,7 +338,7 @@ class Writer(Process):
                 except shutil.SameFileError:
                     pass
                 except (OSError, shutil.Error):
-                    self.results_queue.put(WriterTaskResult(False, task))
+                    self.fail(task)
                     continue
                 self.results_queue.put(WriterTaskResult(True, task))
                 continue
@@ -345,20 +351,20 @@ class Writer(Process):
 
                 if not task.old_file:
                     # if this ever happens....
-                    self.results_queue.put(WriterTaskResult(False, task))
+                    self.fail(task)
                     continue
                 
                 if task.flags & TaskFlag.DELETE_FILE and os.path.exists(task_path):
                     try:
                         os.remove(task_path)
                     except OSError:
-                        self.results_queue.put(WriterTaskResult(False, task))
+                        self.fail(task)
                         continue
                 dest = task.old_destination or task.destination
                 try:
                     os.rename(dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file)), task_path)
                 except OSError:
-                    self.results_queue.put(WriterTaskResult(False, task))
+                    self.fail(task)
                     continue
 
                 self.results_queue.put(WriterTaskResult(True, task))
@@ -372,7 +378,7 @@ class Writer(Process):
 
                 if not task.old_file or not task.patch_file:
                     # if this ever happens....
-                    self.results_queue.put(WriterTaskResult(False, task))
+                    self.fail(task)
                     continue
 
                 try:
@@ -385,9 +391,9 @@ class Writer(Process):
                     gogdl_xdelta3.patch(source, patch, target, self.speed_queue)
 
                 except (OSError, ValueError, RuntimeError) as e:
-                    print("Patch failed", e)
+                    print("Patch failed", task_path, e)
                     print(traceback.format_exc())
-                    self.results_queue.put(WriterTaskResult(False, task))
+                    self.fail(task)
                     continue
                 written = 0
                 if os.path.exists(target):
@@ -404,7 +410,7 @@ class Writer(Process):
                     if os.path.exists(task_path):
                         os.remove(task_path)
                 except OSError:
-                    self.results_queue.put(WriterTaskResult(False, task))
+                    self.fail(task)
                     continue
 
             elif task.flags & TaskFlag.MAKE_EXE:
@@ -417,7 +423,7 @@ class Writer(Process):
                         st = os.stat(task_path)
                         os.chmod(task_path, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
                     except OSError:
-                        self.results_queue.put(WriterTaskResult(False, task))
+                        self.fail(task)
                         continue
                 self.results_queue.put(WriterTaskResult(True, task))
                 continue
@@ -426,7 +432,7 @@ class Writer(Process):
                 if task.shared_memory:
                     if not task.size:
                         print("No size")
-                        self.results_queue.put(WriterTaskResult(False, task))
+                        self.fail(task)
                         continue
                     offset = task.shared_memory.offset
                     end = offset + task.size
@@ -447,7 +453,7 @@ class Writer(Process):
                 elif task.old_file:
                     if not task.size:
                         print("No size")
-                        self.results_queue.put(WriterTaskResult(False, task))
+                        self.fail(task)
                         continue
                     dest = task.old_destination or task.destination
                     old_file_path = dl_utils.get_case_insensitive_name(os.path.join(dest, task.old_file))
@@ -473,7 +479,7 @@ class Writer(Process):
 
             except (OSError, ValueError, zlib.error) as e:
                 print("Writer exception", e)
-                self.results_queue.put(WriterTaskResult(False, task))
+                self.fail(task)
             else:
                 self.results_queue.put(WriterTaskResult(True, task, written=written))
 
