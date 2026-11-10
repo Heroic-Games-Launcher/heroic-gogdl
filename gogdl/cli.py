@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import json
 import logging
-from multiprocessing import freeze_support
+from multiprocessing import freeze_support, get_all_start_methods, get_start_method, set_start_method
 
 from gogdl import api, args, auth, imports, languages, launch, saves
 from gogdl import version as gogdl_version
@@ -18,6 +18,12 @@ def match_lang(arguments, unknown_arguments):
     print(json.dumps(data))
 
 def main():
+    if "fork" in get_all_start_methods() and get_start_method(allow_none=True) != "fork":
+        try:
+            set_start_method("fork", force=True)
+        except RuntimeError:
+            pass
+
     arguments, unknown_args = args.init_parser()
     level = logging.INFO
     if '-d' in unknown_args or '--debug' in unknown_args:
