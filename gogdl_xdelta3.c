@@ -231,11 +231,8 @@ static PyObject *patch(PyObject *self, PyObject *args) {
       Py_UNBLOCK_THREADS
       goto process;
     default:
-      Py_BLOCK_THREADS if (stream.msg) {
-        printf("%s\n", stream.msg);
-        fflush(stdout);
-      }
-      PyErr_SetFromErrno(PyExc_MemoryError);
+      Py_BLOCK_THREADS PyErr_SetString(PyExc_RuntimeError,
+                                       stream.msg ? stream.msg : "xdelta3 decoding failed");
       Py_UNBLOCK_THREADS goto cleanup;
     }
 
